@@ -101,8 +101,8 @@ function publish!(model)
     model.exec_time[] = round(state.last_algorithm_time * 1000; digits = 4)
     model.recalculations[] = state.recalculations
     model.error_text[] = format_error(state, model.validate_error[])
-    model.traces[] = table_traces(state; power = Float64(model.power[]), gap = model.pull_gap[])
-    model.cue_pose[] = current_cue_pose(state, Float64(model.power[]))
+    model.traces[] = table_traces(state)
+    model.cue_pose[] = current_cue_pose(state, Float64(model.power[]), Int(model.cue_seq[]))
     return model
 end
 
@@ -114,7 +114,12 @@ function simulation_loop(model)
                 state.algorithm = selected_algorithm(model)
                 config = selected_config(model)
                 step!(state, config)
+                stopped = !balls_moving(state)
                 publish!(model)
+                if stopped
+                    model.running[] = false
+                    model.status[] = "Mesa parada."
+                end
                 sleep(max(config.dt, 1 / 30))
             else
                 sleep(0.05)
@@ -127,9 +132,9 @@ function simulation_loop(model)
     end
 end
 
-initial_traces = table_traces(demo_state(); power = 420.0)
+initial_traces = table_traces(demo_state())
 
-function current_cue_pose(state::SimulationState, power::Float64)
+function current_cue_pose(state::SimulationState, power::Float64, seq::Int)
     cue = state.balls[state.cue_index]
     return Dict{String, Any}(
         "cx" => cue.position[1],
@@ -138,6 +143,8 @@ function current_cue_pose(state::SimulationState, power::Float64)
         "aim" => state.aim_angle,
         "power" => power,
         "moving" => balls_moving(state),
+        "pull" => PULL_SHOT,
+        "seq" => seq,
     )
 end
 
@@ -151,6 +158,7 @@ function handle_shot_request!(model)
     (angle === nothing || power === nothing) && return
     state = model.sim[]
     balls_moving(state) && return
+    model.cue_seq[] = round(Int, number)
     state.aim_angle = deg2rad(angle)
     model.aim_deg[] = round(Int, rad2deg(state.aim_angle))
     model.power[] = clamp(power, POWER_MIN, POWER_MAX)
@@ -215,12 +223,13 @@ const CueApp = @app begin
     @out chart_config = table_plot_config()
     @out traces = initial_traces
     @out cue_pose = Dict{String, Any}(
-        "cx" => 220.0, "cy" => 500.0, "radius" => 18.0, "aim" => 0.0, "power" => 420.0, "moving" => false,
+        "cx" => 220.0, "cy" => 500.0, "radius" => 18.0, "aim" => 0.0, "power" => 420.0, "moving" => false, "pull" => 28.0, "seq" => 0,
     )
     @private sim = demo_state()
     @private template = rack_balls(6)
     @private loop_on = false
     @private pull_gap = 0.0
+    @private cue_seq = 0
 
     @onchange isready begin
         isready || return
