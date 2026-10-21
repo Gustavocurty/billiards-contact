@@ -15,10 +15,11 @@ include("simulation.jl")
 include("metrics.jl")
 
 export Vec2, Ball, Contact, SimulationState, SimulationConfig
-export cross2, distance, intersect_trajectories, ray_circle_hit
+export cross2, distance, ray_circle_hit, direction_from, s_derivative, circle_residual
 export find_contact_bruteforce, find_shot_contact, locate_contact
-export contact_derivative, euler_step, euler, rk4, rk4_step
-export advance_balls!, initialize!, step!, strike!, demo_balls, demo_state, random_balls, rack_balls, random_resting_balls
-export tracking_error, run_benchmark
+export euler_theta, rk4_theta, integrate_s
+export advance_balls!, advance_events!, initialize!, step!, aim_step!, strike!
+export demo_balls, demo_state, random_balls, rack_balls, random_resting_balls, demo_scenario, benchmark_radius
+export tracking_error, wrong_ball_rate, time_summary, run_benchmark
 
 end

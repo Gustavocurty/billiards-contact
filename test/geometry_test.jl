@@ -1,32 +1,21 @@
-@testset "Geometria" begin
+@testset "Geometria do círculo" begin
     @test distance(Vec2(0.0, 0.0), Vec2(3.0, 4.0)) ≈ 5.0
 
-    cue = Ball(Vec2(0.0, 0.0), Vec2(1.0, 0.0), 0.0)
-    crossing = Ball(Vec2(2.0, 2.0), Vec2(0.0, -1.0), 0.0)
-    valid, s, τ, point = intersect_trajectories(cue, crossing)
+    valid, s, point = ray_circle_hit(Vec2(0.0, 0.0), Vec2(1.0, 0.0), Vec2(10.0, 0.0), 2.0)
     @test valid
-    @test s ≈ 2.0 atol = 1e-12
-    @test τ ≈ 2.0 atol = 1e-12
-    @test point ≈ Vec2(2.0, 0.0) atol = 1e-12
+    @test s ≈ 8.0 atol = 1e-12
+    @test point ≈ Vec2(8.0, 0.0) atol = 1e-12
+    @test distance(point, Vec2(10.0, 0.0)) ≈ 2.0 atol = 1e-12
 
-    parallel = Ball(Vec2(0.0, 1.0), Vec2(2.0, 0.0), 0.0)
-    valid_parallel, _, _, _ = intersect_trajectories(cue, parallel)
-    @test !valid_parallel
+    missed, _, _ = ray_circle_hit(Vec2(0.0, 0.0), Vec2(1.0, 0.0), Vec2(10.0, 5.0), 2.0)
+    @test !missed
 
-    ahead = Ball(Vec2(5.0, 3.0), Vec2(0.0, -1.0), 0.0)
-    valid_ahead, s_ahead, _, point_ahead = intersect_trajectories(cue, ahead)
-    @test valid_ahead
-    @test s_ahead > 0
-    @test point_ahead ≈ Vec2(5.0, 0.0) atol = 1e-12
-
-    behind = Ball(Vec2(-2.0, 1.0), Vec2(0.0, -1.0), 0.0)
-    valid_behind, s_behind, _, _ = intersect_trajectories(cue, behind)
-    @test !valid_behind
+    behind, s_behind, _ = ray_circle_hit(Vec2(0.0, 0.0), Vec2(1.0, 0.0), Vec2(-10.0, 0.0), 2.0)
+    @test !behind
     @test s_behind < 0
 
-    origin = Ball(Vec2(0.0, 1.0), Vec2(0.0, -1.0), 0.0)
-    valid_origin, s_origin, _, point_origin = intersect_trajectories(cue, origin)
-    @test valid_origin
-    @test s_origin ≈ 0.0 atol = 1e-12
-    @test point_origin ≈ Vec2(0.0, 0.0) atol = 1e-12
+    tangent, s_t, point_t = ray_circle_hit(Vec2(0.0, 0.0), Vec2(1.0, 0.0), Vec2(200.0, 36.0), 36.0)
+    @test tangent
+    @test s_t ≈ 200.0 atol = 1e-8
+    @test abs(s_derivative(0.0, s_t, Vec2(0.0, 0.0), Vec2(200.0, 36.0))) === NaN || !isfinite(s_derivative(0.0, s_t, Vec2(0.0, 0.0), Vec2(200.0, 36.0)))
 end

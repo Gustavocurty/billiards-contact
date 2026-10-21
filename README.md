@@ -1,69 +1,78 @@
-# Mesa de sinuca com ponto de contato
+﻿# Mesa de sinuca — contato por força bruta e EDO
 
-A página simula uma tacada: o taco mira a bola branca, a linha tracejada mostra a rota e as bolas começam paradas. Depois da tacada elas se movem, colidem e desaceleram. Por baixo, o projeto ainda compara a busca por força bruta com o rastreamento do ponto de contato por EDO.
+Aplicação didática para comparar a localização do primeiro contato da bola branca por **força bruta** e por **rastreamento via EDO** (Euler/RK4). A mesa preserva atrito, reflexão nas bordas e colisões elásticas tratadas por eventos; o foco da comparação é o centro da bola fantasma.
+
+> Execute o app e faça uma captura da mesa e outra da aba **Resultados** para inserir nos slides/entrega. Os gráficos podem ser baixados em PNG diretamente pela interface.
+
+## Modelo matemático
+
+Se `c0` é o centro da branca, `ci` o centro da bola `i`, `d(θ) = (cos θ, sin θ)` e `s` a distância na rota, o contato da bola fantasma satisfaz
+
+```text
+|c0 + s d(θ) − ci| = r0 + ri                 (2R quando os raios são iguais)
+```
+
+Com `w = c0 + s d − ci`, a interseção reta × círculo vem da quadrática. A menor raiz não negativa é o primeiro contato. Para rastrear a raiz enquanto o taco gira, deriva-se implicitamente:
+
+```text
+ds*/dθ = −s (w · d′) / (w · d),    d′ = (−sin θ, cos θ)
+```
+
+Euler usa um estágio; RK4 usa quatro estágios. A cada `K` frames a busca por força bruta corrige o rastreador (`K = 1` equivale a força bruta contínua). Quando `w · d` é pequeno (quase tangência), o resíduo do círculo é alto ou a solução deixa de ser válida, há correção imediata. A referência por força bruta é sempre calculada **fora** do tempo medido do método.
 
 ## Algoritmos
 
-**Força bruta.** Em cada frame percorre as outras bolas, descarta interseções inválidas e fica com o contato válido mais próximo. A complexidade é O(N).
-
-**Rastreamento.** A força bruta roda no frame 0 e de novo a cada `K` frames. Nos frames intermediários o ponto `X(t)` é integrado por uma EDO, com Euler ou RK4.
-
 ```text
-força bruta → EDO → EDO → ... → força bruta
+força_bruta(bolas, θ):
+  para cada bola diferente da branca: resolva reta × círculo de raio r0 + ri
+  retorne a raiz s >= 0 menor
+
+rastrear(θ, s, alvo, Δθ):
+  s <- Euler ou RK4 da EDO
+  se s/resíduo/tangência forem inválidos: retorne força_bruta
+  retorne c0 + s d(θ)
+
+híbrido(frame):
+  se K = 1 ou frame múltiplo de K: força_bruta
+  senão: rastrear
+  calcule força_bruta novamente apenas como referência de erro
 ```
 
-`K` é `recalculation_interval`. Com `K = 30`, a busca completa volta a cada 30 frames. `K = 1` faz a força bruta em todos os frames.
+## Compilação e execução
 
-## Decisões matemáticas
+Requisitos: Julia **1.10+**, compilador C++17 opcional (`g++`) e navegador moderno.
 
-A mesa tem 1000 por 1000. O benchmark e os testes de referência usam raio desprezível e movimento uniforme, sem atrito e sem colisão entre bolas. Nesse modelo o contato é a interseção das retas
-
-```text
-C₁ + s d₁ = Cᵢ + τ dᵢ,  s ≥ 0
-```
-
-`s < 0` fica atrás da bola de taco e é descartado. `τ` não é limitado: a trajetória da outra bola é a reta da velocidade. Retas paralelas, inclusive colineares, não têm interseção única. Bola de taco parada não define trajetória.
-
-Para movimento retilíneo uniforme a derivada do contato é identicamente nula. Diferenciando `s = (Δ × dᵢ) / (d₁ × dᵢ)` obtém-se `s' = -1` e `X' = (1 + s') d₁ = 0`: as retas não mudam enquanto a velocidade é constante. Euler e RK4 reproduzem essa solução. O erro aparece quando a velocidade muda e o ponto rastreado só é corrigido no próximo múltiplo de `K`.
-
-O erro exibido é `E = ||X_rastreado - X_força bruta||`. Essa segunda busca é opcional e não entra no tempo do algoritmo.
-
-Na mesa da interface as bolas têm raio, começam paradas e a rota é o raio do taco: o contato é o primeiro círculo atingido, não a interseção de duas velocidades. A tacada aplica a força na direção do ângulo. O atrito constante reduz a velocidade até parar. No choque de massas iguais, a componente normal das velocidades é trocada. A borda reflete a velocidade quando o centro chega à margem do raio. Euler e RK4 continuam no núcleo e no CSV; na tela eles não se distinguem, porque entre um evento e outro o contato previsto não se move.
-
-## Instalação
-
-É preciso Julia 1.10 ou mais recente.
-
-```julia
+```powershell
 julia --project=. -e "using Pkg; Pkg.instantiate()"
-```
-
-## Testes
-
-```julia
 julia --project=. -e "using Pkg; Pkg.test()"
-```
-
-## Interface
-
-```julia
 julia --project=. app/app.jl
 ```
 
-Abra http://127.0.0.1:8000 se o navegador não abrir sozinho. A primeira execução compila o Genie e pode demorar.
+Abra `http://127.0.0.1:8000`. Para o benchmark C++ de escala (até `10^5` bolas, com raio reduzido para manter baixa cobertura da mesa):
 
-O taco aponta para a bola branca. **Ângulo** gira o taco e a linha tracejada na hora. **Força** muda o comprimento do taco e a velocidade da tacada. **Tacada** dispara a bola branca se ela estiver parada. Enquanto uma bola se move, a linha tracejada segue a velocidade dela e vai encurtando com o atrito. A linha pontilhada no alvo parado mostra para onde essa bola sai depois do contato.
-
-**Força bruta** recalcula o contato em todo frame. **Rastreamento** só corrige no intervalo `K`; nos outros frames o ponto segue a EDO. `K` não muda a tacada nem o atrito. A quantidade de bolas reconstrói a mesa ao soltar o controle. **Continuar** só retoma um movimento já iniciado. **Reset** e **Aleatório** devolvem todas as bolas paradas.
-
-Euler, RK4 e o passo `dt` saíram da página: no modelo da rota eles não mudam o desenho. Os dois métodos e o efeito de `K` no tempo e no erro continuam no benchmark. O tempo mostrado é só o da atualização do contato. Com **Calcular erro** ligado, a força bruta extra da validação fica de fora desse tempo.
-
-## Benchmark
-
-```julia
-julia --project=. -e "using BilliardsContact; run_benchmark()"
+```powershell
+g++ -O3 -std=c++17 -o cpp/billiards_bench.exe cpp/benchmark.cpp
+.\cpp\billiards_bench.exe benchmark_results.csv benchmark_pareto.svg
 ```
 
-O mesmo experimento está no botão **Benchmark CSV**. O arquivo `benchmark_results.csv` sai na raiz do projeto. As colunas são número de bolas, `K`, algoritmo, método, frames, tempo médio por frame, tempo médio da força bruta, tempo médio da EDO, erro médio, erro máximo e quantidade de recálculos.
+O botão **Rodar experimentos** usa esse executável quando disponível; caso contrário, mede uma varredura reproduzível em Julia. A aba Resultados também aceita `benchmark_results.csv`.
 
-O tempo de frame não inclui a busca usada apenas para medir o erro. Para o rastreamento, menos recálculos reduzem o custo e, depois das reflexões, aumentam o erro. Euler e RK4 coincidem neste modelo porque `X' = 0` entre as reflexões; RK4 avalia a derivada em quatro estágios.
+## Como usar
+
+- Arraste qualquer ponto da mesa para girar o taco em tempo real. Use `←`/`→` para ajuste de `0,5°`.
+- Pegue o taco (`grab`) e puxe para trás. A barra mostra a força; solte acima do limiar para tacar. Não existe botão de tacada.
+- Durante o movimento o taco some e reaparece na última direção quando todas as bolas param.
+- A linha branca tracejada é a rota. **X amarelo** é o método escolhido; **losango ciano** é a referência exata. Um segmento vermelho e `Δ` aparecem acima de `0,5`; duas bolas destacadas indicam troca de alvo.
+- Use **Pausar/Continuar**, **Resetar**, **Sortear posições** e os cenários Aglomerado, Quase alinhadas e Quase tangente na aba Simulação.
+
+## Validação e medições
+
+O tempo do algoritmo é a média de várias execuções do cálculo de contato, em µs; o FPS mostrado é medido com `requestAnimationFrame`. Erro, erro máximo e taxa de bola errada usam sempre a referência por força bruta, sem contaminarem essa medição. A validação física sem atrito verifica conservação de momento linear e energia cinética nas colisões elásticas.
+
+A aba **Resultados** produz: tempo por frame × `N` em log-log; Pareto erro × tempo por `K`; erro médio/máximo e bola errada × `K`; convergência erro × passo `Δθ` (Euler ~1, RK4 ~4); tabela de validação física, tabela-resumo e conclusão exportável.
+
+O resultado negativo faz parte da análise: para `N` pequeno, o custo da EDO pode superar a força bruta. O rastreamento passa a compensar em escalas maiores e com `K` moderado; quase tangência e troca de bola permanecem limitações importantes e motivam os recálculos.
+
+## Limitações e próximos passos
+
+O modelo é 2D, sem efeito, caçapas ou perda de energia na borda. Trabalhos futuros incluem detectar troca de alvo antes do próximo `K`, adaptação automática de passo perto de tangências e uma bateria maior de cenários físicos.

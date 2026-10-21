@@ -15,10 +15,9 @@ end
 """
 Estado da simulação.
 
-`recalculations` conta execuções da força bruta (busca inicial e correções).
-`tracking_error` guarda o último erro medido contra a força bruta; `NaN` significa
-que a validação não foi executada neste frame.
-`last_kind` vale `:brute_force` ou `:tracking`, conforme a atualização do frame.
+O contato é sempre o centro da bola fantasma: `c0 + s d`, com `|c0 + s d − ci| = 2R`.
+`tracked_s` é o parâmetro integrado em θ. `reference_contact` é a força bruta,
+preenchida quando o erro está ligado.
 """
 mutable struct SimulationState
     balls::Vector{Ball}
@@ -35,6 +34,14 @@ mutable struct SimulationState
     tracking_error::Float64
     aim_angle::Float64
     live_shot::Bool
+    reference_contact::Union{Contact, Nothing}
+    tracked_s::Float64
+    track_ball::Int
+    sample_times::Vector{Float64}
+    sample_errors::Vector{Float64}
+    wrong_ball_count::Int
+    comparisons::Int
+    error_frame::Int
 end
 
 function SimulationState(balls::Vector{Ball}; cue_index::Int = 1, algorithm::Symbol = :tracking, aim_angle::Float64 = 0.0, live_shot::Bool = false)
@@ -53,6 +60,14 @@ function SimulationState(balls::Vector{Ball}; cue_index::Int = 1, algorithm::Sym
         NaN,
         aim_angle,
         live_shot,
+        nothing,
+        NaN,
+        0,
+        Float64[],
+        Float64[],
+        0,
+        0,
+        -1,
     )
 end
 

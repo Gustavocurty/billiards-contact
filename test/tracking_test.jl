@@ -1,105 +1,120 @@
-struct TimeRamp end
-(::TimeRamp)(h::Float64, ::Vec2) = Vec2(h, 0.0)
-
-norm_of(v::Vec2) = hypot(v[1], v[2])
-
-function uniform_state(method::Symbol; interval::Int = 100)
+function head_on_error(method::Symbol, h::Float64, total::Float64)
+    radius = 18.0
     balls = [
-        Ball(Vec2(500.0, 500.0), Vec2(10.0, 0.0), 0.0),
-        Ball(Vec2(600.0, 600.0), Vec2(0.0, -10.0), 0.0),
+        Ball(Vec2(0.0, 0.0), Vec2(0.0, 0.0), radius),
+        Ball(Vec2(220.0, 24.0), Vec2(0.0, 0.0), radius),
     ]
-    config = SimulationConfig(
-        dt = 0.05,
-        recalculation_interval = interval,
-        numerical_method = method,
-    )
-    state = SimulationState(balls; algorithm = :tracking)
+    config = SimulationConfig(recalculation_interval = 1_000_000_000, numerical_method = method)
+    state = SimulationState(balls; algorithm = :tracking, aim_angle = 0.0, live_shot = true)
     initialize!(state)
-    return state, config
-end
-
-@testset "Rastreamento" begin
-    @test euler_step(Vec2(1.0, 2.0), Vec2(3.0, -4.0), 0.5) ≈ Vec2(2.5, 0.0) atol = 1e-12
-
-    x0 = Vec2(0.0, 0.0)
-    @test euler(x0, 0.2, TimeRamp()) ≈ Vec2(0.0, 0.0) atol = 1e-12
-    @test rk4(x0, 0.2, TimeRamp()) ≈ Vec2(0.02, 0.0) atol = 1e-12
-
-    cue = Ball(Vec2(500.0, 500.0), Vec2(10.0, 0.0), 0.0)
-    other = Ball(Vec2(600.0, 600.0), Vec2(0.0, -10.0), 0.0)
-    @test norm_of(contact_derivative(cue, other)) < 1e-12
-
-    state_euler, config_euler = uniform_state(:euler)
-    x_euler = state_euler.contact.point
-    for _ in 1:20
-        step!(state_euler, config_euler)
+    n = max(round(Int, total / h), 1)
+    for _ in 1:n
+        aim_step!(state, config, h)
+        @test state.last_kind == :tracking
     end
-    @test state_euler.last_kind == :tracking
-    @test state_euler.recalculations == 1
-    @test norm_of(state_euler.contact.point - x_euler) < 1e-9
-    @test tracking_error(state_euler) < 1e-8
-
-    state_rk4, config_rk4 = uniform_state(:rk4)
-    x_rk4 = state_rk4.contact.point
-    for _ in 1:20
-        step!(state_rk4, config_rk4)
-    end
-    @test norm_of(state_rk4.contact.point - x_rk4) < 1e-9
-    @test tracking_error(state_rk4) < 1e-8
-    @test norm_of(state_rk4.contact.point - state_euler.contact.point) < 1e-8
-
-    state_k, config_k = uniform_state(:euler; interval = 5)
-    for _ in 1:5
-        step!(state_k, config_k)
-    end
-    @test state_k.frame == 5
-    @test state_k.recalculations == 2
-    @test state_k.last_kind == :brute_force
-    reference = find_contact_bruteforce(state_k.balls, 1)
+    reference = locate_contact(state)
     @test reference !== nothing
-    @test norm_of(state_k.contact.point - reference.point) < 1e-9
+    return distance(state.contact.point, reference.point)
 end
 
-@testset "Simulação" begin
-    balls = [Ball(Vec2(990.0, 10.0), Vec2(100.0, -100.0), 0.0)]
-    advance_balls!(balls, 0.2, 1000.0, 1000.0)
-    @test balls[1].position[1] == 1000.0
-    @test balls[1].position[2] == 0.0
-    @test balls[1].velocity[1] == -100.0
-    @test balls[1].velocity[2] == 100.0
-
+@testset "EDO da mira" begin
+    radius = 18.0
     balls = [
-        Ball(Vec2(960.0, 400.0), Vec2(200.0, 100.0), 0.0),
-        Ball(Vec2(800.0, 700.0), Vec2(80.0, -36.0), 0.0),
+        Ball(Vec2(0.0, 0.0), Vec2(0.0, 0.0), radius),
+        Ball(Vec2(180.0, 0.0), Vec2(0.0, 0.0), radius),
     ]
-    config = SimulationConfig(dt = 0.1, recalculation_interval = 20, numerical_method = :euler)
-    state = SimulationState(balls; algorithm = :tracking)
+    config = SimulationConfig(recalculation_interval = 5, numerical_method = :euler)
+    state = SimulationState(balls; algorithm = :tracking, live_shot = true)
     initialize!(state)
     @test state.contact !== nothing
-    for _ in 1:4
-        step!(state, config)
-    end
-    @test state.balls[1].velocity[1] < 0
     @test state.recalculations == 1
-    @test tracking_error(state) > 1.0
-
-    while state.frame < 20
-        step!(state, config)
+    for _ in 1:4
+        aim_step!(state, config, 0.002)
     end
+    @test state.last_kind == :tracking
+    aim_step!(state, config, 0.002)
+    @test state.frame == 5
+    @test state.last_kind == :brute_force
     @test state.recalculations == 2
-    reference = find_contact_bruteforce(state.balls, 1)
-    if reference === nothing
-        @test state.contact === nothing
-    else
-        @test norm_of(state.contact.point - reference.point) < 1e-6
-    end
 
-    demo = demo_state()
-    @test demo.contact !== nothing
-    @test demo.recalculations == 1
+    k1 = SimulationConfig(recalculation_interval = 1, numerical_method = :rk4)
+    forced = SimulationState(copy(balls); algorithm = :tracking, live_shot = true)
+    initialize!(forced)
+    aim_step!(forced, k1, 0.02)
+    @test forced.last_kind == :brute_force
+
+    grazing = [
+        Ball(Vec2(0.0, 0.0), Vec2(0.0, 0.0), radius),
+        Ball(Vec2(200.0, 36.0), Vec2(0.0, 0.0), radius),
+    ]
+    grazing_state = SimulationState(grazing; algorithm = :tracking, live_shot = true)
+    initialize!(grazing_state)
+    before = grazing_state.recalculations
+    aim_step!(grazing_state, SimulationConfig(recalculation_interval = 100, numerical_method = :rk4), 0.01)
+    @test grazing_state.last_kind == :brute_force
+    @test grazing_state.recalculations == before + 1
+
+    spinning = [
+        Ball(Vec2(0.0, 0.0), Vec2(0.0, 0.0), radius),
+        Ball(Vec2(180.0, 0.0), Vec2(0.0, 0.0), radius),
+    ]
+    variable = SimulationState(spinning; algorithm = :tracking, live_shot = true)
+    initialize!(variable)
+    for h in (0.004, -0.001, 0.008, 0.002, -0.003)
+        aim_step!(variable, SimulationConfig(recalculation_interval = 50, numerical_method = :rk4), h)
+        @test variable.last_kind == :tracking
+    end
+    @test tracking_error(variable) < 1e-3
 end
 
-@testset "Benchmark" begin
+@testset "Convergência" begin
+    h = 2e-3
+    total = 0.04
+    e_euler = head_on_error(:euler, h, total)
+    e_euler_half = head_on_error(:euler, h / 2, total)
+    order_euler = log2(e_euler / e_euler_half)
+    @test e_euler > e_euler_half
+    @test 0.7 < order_euler < 1.4
+
+    e_rk = head_on_error(:rk4, h, total)
+    e_rk_half = head_on_error(:rk4, h / 2, total)
+    order_rk = log2(e_rk / e_rk_half)
+    @test e_rk < e_euler
+    @test order_rk > 3.0
+end
+
+@testset "Alvos quase alinhados" begin
+    radius = 18.0
+    balls = [
+        Ball(Vec2(0.0, 0.0), Vec2(0.0, 0.0), radius),
+        Ball(Vec2(220.0, 0.0), Vec2(0.0, 0.0), radius),
+        Ball(Vec2(150.0, 55.0), Vec2(0.0, 0.0), radius),
+    ]
+    indices = Int[]
+    for degree in 0:12
+        state = SimulationState(copy(balls); aim_angle = deg2rad(Float64(degree)), live_shot = true)
+        contact = locate_contact(state)
+        contact === nothing || push!(indices, contact.ball_index)
+    end
+    @test length(unique(indices)) >= 2
+
+    tracked = SimulationState(copy(balls); algorithm = :tracking, aim_angle = 0.0, live_shot = true)
+    config = SimulationConfig(recalculation_interval = 80, numerical_method = :euler)
+    initialize!(tracked)
+    changed = false
+    for _ in 1:30
+        aim_step!(tracked, config, deg2rad(0.35))
+        reference = locate_contact(tracked)
+        if reference !== nothing && tracked.contact !== nothing && reference.ball_index != tracked.contact.ball_index
+            changed = true
+            @test tracked.last_kind == :tracking
+            break
+        end
+    end
+    @test changed
+end
+
+@testset "Benchmark da mira" begin
     path = tempname() * ".csv"
     rows = run_benchmark(
         ball_counts = [8],
@@ -110,10 +125,28 @@ end
     )
     @test length(rows) == 6
     @test isfile(path)
-    @test occursin("mean_error", read(path, String))
+    text = read(path, String)
+    @test occursin("mean_error", text)
+    @test occursin("wrong_ball_rate", text)
+    @test occursin("p99_frame_time_s", text)
+    @test isfile(replace(path, ".csv" => "_pareto.svg"))
 
     k1 = filter(row -> row.algorithm == "tracking" && row.recalculation_interval == 1 && row.numerical_method == "euler", rows)
-    k5 = filter(row -> row.algorithm == "tracking" && row.recalculation_interval == 5 && row.numerical_method == "euler", rows)
-    @test only(k1).recalculations > only(k5).recalculations
     @test only(k1).mean_error < 1e-6
+
+    pair = [
+        Ball(Vec2(0.0, 0.0), Vec2(0.0, 0.0), 18.0),
+        Ball(Vec2(180.0, 0.0), Vec2(0.0, 0.0), 18.0),
+    ]
+    function counted(interval)
+        config = SimulationConfig(recalculation_interval = interval, numerical_method = :euler)
+        state = SimulationState(copy(pair); algorithm = :tracking, live_shot = true)
+        initialize!(state)
+        state.recalculations = 0
+        for _ in 1:12
+            aim_step!(state, config, 0.002)
+        end
+        return state.recalculations
+    end
+    @test counted(1) > counted(5)
 end

@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="480" viewBox="0 0 760 480">
+<rect width="760" height="480" fill="#f7f4ee"/>
+<text x="380" y="32" text-anchor="middle" font-family="sans-serif" font-size="18">Erro medio x tempo por frame</text>
+<line x1="70" y1="430" x2="720" y2="430" stroke="#333"/>
+<line x1="70" y1="50" x2="70" y2="430" stroke="#333"/>
+<text x="390" y="460" text-anchor="middle" font-family="sans-serif" font-size="13">log10(tempo medio por frame, s)</text>
+<circle cx="92.3574" cy="430" r="4" fill="#e53935"/>
+<circle cx="93.6672" cy="430" r="4" fill="#1e88e5"/>
+<circle cx="75.2412" cy="101.552" r="4" fill="#e53935"/>
+<circle cx="84.6852" cy="158.596" r="4" fill="#1e88e5"/>
+<circle cx="77.7231" cy="96.3693" r="4" fill="#e53935"/>
+<circle cx="85.4181" cy="150.884" r="4" fill="#1e88e5"/>
+<circle cx="75.2412" cy="95.0217" r="4" fill="#e53935"/>
+<circle cx="84.3159" cy="139.029" r="4" fill="#1e88e5"/>
+<circle cx="76.9054" cy="63.0273" r="4" fill="#e53935"/>
+<circle cx="82.4398" cy="63.6999" r="4" fill="#1e88e5"/>
+<circle cx="70" cy="63.0273" r="4" fill="#e53935"/>
+<circle cx="83.5714" cy="63.6999" r="4" fill="#1e88e5"/>
+<circle cx="242.378" cy="430" r="4" fill="#e53935"/>
+<circle cx="235.867" cy="430" r="4" fill="#1e88e5"/>
+<circle cx="163.601" cy="54.7328" r="4" fill="#e53935"/>
+<circle cx="159.374" cy="50.8795" r="4" fill="#1e88e5"/>
+<circle cx="158.471" cy="57.1687" r="4" fill="#e53935"/>
+<circle cx="149.637" cy="50.8804" r="4" fill="#1e88e5"/>
+<circle cx="186.233" cy="61.1277" r="4" fill="#e53935"/>
+<circle cx="138.341" cy="51.99" r="4" fill="#1e88e5"/>
+<circle cx="147.092" cy="54.2961" r="4" fill="#e53935"/>
+<circle cx="140.381" cy="50" r="4" fill="#1e88e5"/>
+<circle cx="148.6" cy="54.2961" r="4" fill="#e53935"/>
+<circle cx="141.38" cy="50" r="4" fill="#1e88e5"/>
+<circle cx="391.09" cy="430" r="4" fill="#e53935"/>
+<circle cx="391.298" cy="430" r="4" fill="#1e88e5"/>
+<circle cx="327.362" cy="57.4378" r="4" fill="#e53935"/>
+<circle cx="332.141" cy="61.748" r="4" fill="#1e88e5"/>
+<circle cx="309.313" cy="57.3806" r="4" fill="#e53935"/>
+<circle cx="318.985" cy="59.7342" r="4" fill="#1e88e5"/>
+<circle cx="301.466" cy="56.7749" r="4" fill="#e53935"/>
+<circle cx="302.32" cy="59.2211" r="4" fill="#1e88e5"/>
+<circle cx="295.331" cy="56.7381" r="4" fill="#e53935"/>
+<circle cx="289.064" cy="57.6679" r="4" fill="#1e88e5"/>
+<circle cx="296.021" cy="56.7381" r="4" fill="#e53935"/>
+<circle cx="288.962" cy="57.6679" r="4" fill="#1e88e5"/>
+<circle cx="553.28" cy="430" r="4" fill="#e53935"/>
+<circle cx="553.468" cy="430" r="4" fill="#1e88e5"/>
+<circle cx="500.751" cy="67.4254" r="4" fill="#e53935"/>
+<circle cx="511.545" cy="72.9247" r="4" fill="#1e88e5"/>
+<circle cx="501.187" cy="67.9086" r="4" fill="#e53935"/>
+<circle cx="507.942" cy="70.8278" r="4" fill="#1e88e5"/>
+<circle cx="492.795" cy="68.4505" r="4" fill="#e53935"/>
+<circle cx="500.555" cy="70.071" r="4" fill="#1e88e5"/>
+<circle cx="495.845" cy="68.4505" r="4" fill="#e53935"/>
+<circle cx="501.491" cy="70.071" r="4" fill="#1e88e5"/>
+<circle cx="504.286" cy="68.4505" r="4" fill="#e53935"/>
+<circle cx="501.387" cy="70.071" r="4" fill="#1e88e5"/>
+<circle cx="720" cy="430" r="4" fill="#e53935"/>
+<circle cx="718.458" cy="430" r="4" fill="#1e88e5"/>
+<circle cx="677.656" cy="80.7401" r="4" fill="#e53935"/>
+<circle cx="691.486" cy="84.5027" r="4" fill="#1e88e5"/>
+<circle cx="675.442" cy="79.4634" r="4" fill="#e53935"/>
+<circle cx="696.156" cy="83.8981" r="4" fill="#1e88e5"/>
+<circle cx="674.397" cy="79.5202" r="4" fill="#e53935"/>
+<circle cx="691.7" cy="83.8981" r="4" fill="#1e88e5"/>
+<circle cx="675.568" cy="79.6414" r="4" fill="#e53935"/>
+<circle cx="691.713" cy="83.8981" r="4" fill="#1e88e5"/>
+<circle cx="674.787" cy="79.6414" r="4" fill="#e53935"/>
+<circle cx="692.086" cy="83.8981" r="4" fill="#1e88e5"/>
+<circle cx="90" cy="48" r="4" fill="#e53935"/><text x="100" y="52" font-family="sans-serif" font-size="12">Euler</text>
+<circle cx="170" cy="48" r="4" fill="#1e88e5"/><text x="180" y="52" font-family="sans-serif" font-size="12">RK4</text>
+</svg>

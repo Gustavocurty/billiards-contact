@@ -1,11 +1,12 @@
-# Trajetórias com raio desprezível (r → 0): a interseção é entre retas.
-# A bola de taco só considera o futuro da própria velocidade (s ≥ 0).
-# τ fica livre: a trajetória da outra bola é a reta suporte de d_i.
-# Retas paralelas, inclusive as colineares, não têm interseção única.
+# Contato com raio: a branca fantasma está em c0 + s d, |d| = 1,
+# e encosta na bola i quando |c0 + s d − ci| = ri + r0 (2R se os raios são iguais).
+# A raiz usada é a entrada do círculo, s = −b − sqrt(b² − c),
+# com b = w·d, c = |w|² − R² e w = c0 − ci.
 
 const SPEED_EPS = 1e-12
-const PARALLEL_EPS = 1e-10
 const S_EPS = 1e-9
+const TANGENT_EPS = 1e-3
+const RESIDUAL_LIMIT = 2.0
 
 @inline function cross2(a::Vec2, b::Vec2)::Float64
     return a[1] * b[2] - a[2] * b[1]
@@ -15,63 +16,54 @@ function distance(a::Vec2, b::Vec2)::Float64
     return hypot(a[1] - b[1], a[2] - b[2])
 end
 
-"""
-Interseção de `C₁ + s d₁` com `Cᵢ + τ dᵢ`.
-
-Retorna `(válida, s, τ, ponto)`. Interseções com `s < 0` ficam atrás da bola de taco.
-"""
-function intersect_trajectories(cue::Ball, other::Ball)
-    d1 = cue.velocity
-    di = other.velocity
-    speed1 = hypot(d1[1], d1[2])
-    if speed1 <= SPEED_EPS
-        return (false, 0.0, 0.0, Vec2(0.0, 0.0))
-    end
-
-    δ = cross2(d1, di)
-    scale = max(speed1 * hypot(di[1], di[2]), 1.0)
-    if abs(δ) <= PARALLEL_EPS * scale
-        return (false, 0.0, 0.0, Vec2(0.0, 0.0))
-    end
-
-    Δ = other.position - cue.position
-    s = cross2(Δ, di) / δ
-    τ = cross2(Δ, d1) / δ
-    if s < -S_EPS
-        return (false, s, τ, cue.position + s * d1)
-    end
-
-    s_use = s < 0.0 ? 0.0 : s
-    return (true, s_use, τ, cue.position + s_use * d1)
+function direction_from(angle::Float64)::Vec2
+    return Vec2(cos(angle), sin(angle))
 end
 
 """
-Primeiro encontro do raio `origem + s·direção` (s ≥ 0) com um círculo.
-`s` é a distância até o centro da bola de taco no contato.
-Usado quando as bolas estão paradas: a rota é a direção do taco, não a velocidade.
+Primeira raiz s ≥ 0 de |origem + s d − centro| = raio.
+`d` não precisa estar normalizado. Sem raiz à frente, o encontro é inválido.
 """
 function ray_circle_hit(origin::Vec2, direction::Vec2, center::Vec2, radius_sum::Float64)
     dir_len = hypot(direction[1], direction[2])
     if dir_len <= SPEED_EPS || radius_sum < 0.0
         return (false, 0.0, Vec2(0.0, 0.0))
     end
-    ux = direction[1] / dir_len
-    uy = direction[2] / dir_len
-    wx = center[1] - origin[1]
-    wy = center[2] - origin[2]
-    along = wx * ux + wy * uy
-    disc = along * along - (wx * wx + wy * wy - radius_sum * radius_sum)
+    dx = direction[1] / dir_len
+    dy = direction[2] / dir_len
+    wx = origin[1] - center[1]
+    wy = origin[2] - center[2]
+    b = wx * dx + wy * dy
+    c = wx * wx + wy * wy - radius_sum * radius_sum
+    disc = b * b - c
     if disc < 0.0
         return (false, 0.0, Vec2(0.0, 0.0))
     end
-    root = sqrt(disc)
-    s = along - root
+    s = -b - sqrt(disc)
     if s < -S_EPS
-        s = along + root
-    end
-    if s < -S_EPS
-        return (false, 0.0, Vec2(0.0, 0.0))
+        return (false, s, origin + s * Vec2(dx, dy))
     end
     s_use = s < 0.0 ? 0.0 : s
-    return (true, s_use, origin + s_use * Vec2(ux, uy))
+    return (true, s_use, origin + s_use * Vec2(dx, dy))
+end
+
+"""
+ds/dθ = −s (w·d′) / (w·d), com w = c0 + s d − ci e d′ = (−sin θ, cos θ).
+`NaN` marca quase tangência (w·d → 0) e obriga recálculo.
+"""
+function s_derivative(theta::Float64, s::Float64, origin::Vec2, center::Vec2)::Float64
+    d = direction_from(theta)
+    dp = Vec2(-sin(theta), cos(theta))
+    w = origin + s * d - center
+    denom = w[1] * d[1] + w[2] * d[2]
+    if abs(denom) < TANGENT_EPS
+        return NaN
+    end
+    return -s * (w[1] * dp[1] + w[2] * dp[2]) / denom
+end
+
+function circle_residual(theta::Float64, s::Float64, origin::Vec2, center::Vec2, radius_sum::Float64)::Float64
+    d = direction_from(theta)
+    w = origin + s * d - center
+    return abs(hypot(w[1], w[2]) - radius_sum)
 end

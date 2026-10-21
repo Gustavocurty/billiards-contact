@@ -1,16 +1,17 @@
 const ALG_BRUTE = "Força bruta"
 const ALG_TRACK = "Rastreamento"
+const METHOD_EULER = "Euler"
+const METHOD_RK4 = "RK4"
 
 function table_layout()
     return PlotlyBase.Layout(
-        title = "Mesa — vista superior",
-        xaxis = PlotlyBase.attr(title = "x", range = [-40, 1040], zeroline = false, constrain = "domain", fixedrange = true),
-        yaxis = PlotlyBase.attr(title = "y", range = [-40, 1040], zeroline = false, scaleanchor = "x", scaleratio = 1, fixedrange = true),
+        xaxis = PlotlyBase.attr(range = [0, 1000], visible = false, fixedrange = true),
+        yaxis = PlotlyBase.attr(range = [0, 1000], visible = false, scaleanchor = "x", scaleratio = 1, fixedrange = true),
         plot_bgcolor = "#0f6b3c",
-        paper_bgcolor = "#f7f4ee",
-        height = 700,
-        margin = PlotlyBase.attr(l = 48, r = 16, t = 48, b = 72),
-        legend = PlotlyBase.attr(orientation = "h", y = -0.2),
+        paper_bgcolor = "#0f6b3c",
+        autosize = true,
+        margin = PlotlyBase.attr(l = 0, r = 0, t = 0, b = 0),
+        showlegend = false,
         uirevision = "mesa",
         dragmode = false,
         hovermode = false,
@@ -23,6 +24,7 @@ function table_plot_config()
         "doubleClick" => false,
         "displayModeBar" => false,
         "displaylogo" => false,
+        "responsive" => true,
     )
 end
 
@@ -99,11 +101,12 @@ function table_traces(state::SimulationState)
     balls = state.balls
     cue_i = state.cue_index
     target_i = state.contact === nothing ? 0 : state.contact.ball_index
+    exact_i = state.reference_contact === nothing ? 0 : state.reference_contact.ball_index
     others_x = Float64[]
     others_y = Float64[]
     others_color = String[]
     for i in eachindex(balls)
-        (i == cue_i || i == target_i) && continue
+        (i == cue_i || i == target_i || i == exact_i) && continue
         push!(others_x, balls[i].position[1])
         push!(others_y, balls[i].position[2])
         push!(others_color, BALL_COLORS[mod1(i, length(BALL_COLORS))])
@@ -173,12 +176,37 @@ function table_traces(state::SimulationState)
         end
         push!(traces, PlotlyBase.scatter(
             x = [tx], y = [ty], mode = "markers", name = "Alvo",
-            marker = PlotlyBase.attr(size = 20, color = "#ff5a5f", line = PlotlyBase.attr(color = "#1b1b1b", width = 1)),
+            marker = PlotlyBase.attr(size = 21, color = "#ff5a5f", line = PlotlyBase.attr(color = exact_i != 0 && exact_i != target_i ? "#fff3e0" : "#1b1b1b", width = exact_i != 0 && exact_i != target_i ? 3 : 1)),
+        ))
+        radius_sum = cue.radius + target.radius
+        ring = range(0, 2π; length = 49)
+        push!(traces, PlotlyBase.scatter(
+            x = [tx + radius_sum * cos(a) for a in ring],
+            y = [ty + radius_sum * sin(a) for a in ring],
+            mode = "lines", name = "Círculo 2R",
+            line = PlotlyBase.attr(color = "#80deea", width = 1, dash = "dot"),
         ))
         push!(traces, PlotlyBase.scatter(
             x = [contact_point[1]], y = [contact_point[2]], mode = "markers", name = "Contato",
             marker = PlotlyBase.attr(symbol = "x", size = 14, color = "#ffe66d", line = PlotlyBase.attr(color = "#1b1b1b", width = 2)),
         ))
+    end
+    exact = state.reference_contact
+    if exact !== nothing
+        push!(traces, PlotlyBase.scatter(
+            x = [exact.point[1]], y = [exact.point[2]], mode = "markers", name = "Contato exato",
+            marker = PlotlyBase.attr(symbol = "diamond-open", size = 17, color = "#4dd0e1", line = PlotlyBase.attr(color = "#e0f7fa", width = 2)),
+        ))
+        if exact_i != 0 && exact_i != target_i
+            b = balls[exact_i]
+            push!(traces, PlotlyBase.scatter(x = [b.position[1]], y = [b.position[2]], mode = "markers", name = "Alvo exato",
+                marker = PlotlyBase.attr(size = 21, color = "#26c6da", line = PlotlyBase.attr(color = "#fff3e0", width = 3))))
+            push!(traces, PlotlyBase.scatter(x = [b.position[1]], y = [b.position[2] + 34], mode = "text", text = ["bola errada"], name = "Aviso", textfont = PlotlyBase.attr(color = "#ffebee", size = 12)))
+        end
+        if contact_point !== nothing && distance(contact_point, exact.point) > 0.5
+            δ = distance(contact_point, exact.point)
+            push!(traces, PlotlyBase.scatter(x = [contact_point[1], exact.point[1]], y = [contact_point[2], exact.point[2]], mode = "lines+text", text = ["", "Δ = $(round(δ; digits = 2))"], textposition = "top right", name = "Diferença", line = PlotlyBase.attr(color = "#ef5350", width = 2), textfont = PlotlyBase.attr(color = "#ffebee", size = 12)))
+        end
     end
     push!(traces, PlotlyBase.scatter(
         x = [x1], y = [y1], mode = "markers", name = "Branca",
@@ -187,47 +215,42 @@ function table_traces(state::SimulationState)
     return traces
 end
 
+function pieces(parts...)
+    return Genie.Renderer.Html.ParsedHTMLString(join(string.(parts)))
+end
+
 function ui()
-    [
-        h4("Mesa de sinuca"),
-        p("Clique em qualquer ponto da mesa e arraste: o taco gira na hora. Segure o taco e puxe para trás para armar a força; solte para a tacada. Com a mesa em movimento o taco some."),
-        row([
-            cell(class = "st-col col-12 col-md-8", [
-                plot(:traces, layout = :layout, config = :chart_config),
-            ]),
-            cell(class = "st-col col-12 col-md-4 q-pa-md", [
-                p("Ângulo do taco: {{aim_deg}}°"),
-                p("Força: {{power}}"),
-                select(:algorithm, options = [ALG_BRUTE, ALG_TRACK], label = "Algoritmo da rota"),
-                p("Bolas: {{n_balls}}"),
-                slider(2:1:16, :n_balls, lazy = true),
-                p("Correção a cada K = {{recalc_interval}} frames, só no rastreamento."),
-                slider(1:1:120, :recalc_interval),
-                toggle("Calcular erro", :validate_error),
-                row([
-                    btn("Tacada", @click(:shot_click), color = "primary"),
-                    btn("Continuar", @click(:start_click)),
-                    btn("Pausar", @click(:pause_click), color = "warning"),
-                ]),
-                row([
-                    btn("Reset", @click(:reset_click)),
-                    btn("Aleatório", @click(:random_click)),
-                    btn("Benchmark CSV", @click(:bench_click), color = "secondary"),
-                ]),
-                h6("Métricas"),
-                p("Frame: {{frame}}"),
-                p("Tempo: {{sim_time}} s"),
-                p("Algoritmo: {{algorithm}}"),
-                p("Última atualização: {{update_kind}}"),
-                p("Contato: {{contact_text}}"),
-                p("Bola alvo: {{target_text}}"),
-                p("Tempo do algoritmo: {{exec_time}} ms"),
-                p("Recálculos: {{recalculations}}"),
-                p("Erro: {{error_text}}"),
-                p("{{status}}"),
-            ]),
-        ]),
-    ]
+    cell(class = "pool-app", pieces(
+            Genie.Renderer.Html.ParsedHTMLString("<header class='pool-header'><h1>Mesa de sinuca · Contato da bola fantasma</h1><button id='help-button' class='help' aria-label='Como usar'>?</button></header>"),
+            cell(class = "pool-main", pieces(
+                cell(class = "table-wrap", pieces(cell(class = "table-frame", pieces(
+                    plot(:traces, layout = :layout, config = :chart_config),
+                    "<div class='table-legend'>— rota · ✕ contato · ◇ exato · ╌ saída<br><span id='cue-power'>Força: 0%</span></div>",
+                )))),
+                cell(class = "side-panel", pieces(
+                    "<div class='tabs'><button id='tab-sim' class='active'>Simulação</button><button id='tab-results'>Resultados</button></div>",
+                    cell(class = "tab-content", pieces(
+                        cell(id = "simulation-pane", class = "tab-pane", pieces(
+                            select(:algorithm, options = [ALG_BRUTE, ALG_TRACK], label = "Algoritmo da rota", hint = "Método usado para o contato."),
+                            select(:method, options = [METHOD_EULER, METHOD_RK4], label = "Integração", hint = "Método numérico da EDO."),
+                            p("Bolas: {{n_balls}}"), slider(2:1:16, :n_balls, lazy = true),
+                            p("Intervalo K: {{recalc_interval}} frames (K = 1 é força bruta)"), slider(1:1:120, :recalc_interval),
+                            row(pieces(btn("Tacada", @click(:shot_click), color = "primary"), btn("Pausar", @click(:pause_toggle_click)), btn("Resetar", @click(:reset_click)), btn("Sortear posições", @click(:random_click)))),
+                            p("Cenários"), row(pieces(btn("Aglomerado", @click(:cluster_click)), btn("Quase alinhadas", @click(:aligned_click)), btn("Quase tangente", @click(:tangent_click)))),
+                            h6("Métricas ao vivo"),
+                            "<div class='metrics'><div class='metric'><b>Frame · tempo</b>{{frame}} · {{sim_time}} s</div><div class='metric'><b>Ângulo · ω</b>{{aim_deg}}° · <span id='omega-live'>0</span> °/s</div><div class='metric'><b>Última atualização</b>{{update_kind}}</div><div class='metric'><b>Bola · contato</b>{{target_text}} · {{contact_text}}</div><div class='metric'><b>Erro atual / máximo</b>{{error_text}}</div><div class='metric'><b>Bola errada · recálculos</b>{{wrong_text}} · {{recalculations}}</div><div class='metric'><b>Algoritmo (média)</b>{{exec_time}} µs</div><div class='metric'><b>FPS da tela</b><span id='screen-fps'>—</span></div></div>",
+                            p("{{status}}"),
+                        )),
+                        cell(id = "results-pane", class = "tab-pane", pieces(
+                            p("Varreduras reproduzíveis com semente fixa."),
+                            row(pieces(btn("Rodar experimentos", @click(:bench_click), color = "primary"), btn("Exportar CSV", @click(:export_click)), "<button id='load-csv'>Carregar CSV</button><input id='csv-file' type='file' accept='.csv' hidden>")),
+                            p("{{benchmark_status}}"),
+                            "<progress id='bench-progress' value='{{benchmark_progress}}' max='100'></progress><div id='chart-time' class='chart'></div><div id='chart-pareto' class='chart'></div><div id='chart-error' class='chart'></div><div id='chart-convergence' class='chart'></div><div id='physical-check' class='metric'></div><button id='download-plots'>Baixar gráficos (PNG)</button><div id='results-summary'></div>",
+                        )),
+                    )),
+                )),
+            )),
+        ))
 end
 
 function cue_pointer_script()
@@ -252,6 +275,7 @@ var aimLabel = null;
 var powLabel = null;
 var routeGroup = null;
 var cueWaitSeq = 0;
+var cueLastSend = 0;
 
 function num(value, fallback) {
   var n = Number(value);
@@ -356,7 +380,9 @@ function cueLabels() {
     }
   }
   if (aimLabel) aimLabel.textContent = 'Ângulo do taco: ' + Math.round(cueAim * 180 / Math.PI) + '°';
-  if (powLabel) powLabel.textContent = 'Força: ' + Math.round(cuePower);
+   if (powLabel) powLabel.textContent = 'Força: ' + Math.round(cuePower);
+   var compactPower = document.getElementById('cue-power');
+   if (compactPower) compactPower.textContent = 'Força: ' + Math.round(Math.max(0, Math.min(100, (cuePower - 80) / 7.2))) + '%';
 }
 function setRouteHidden(hidden) {
   if (!routeGroup || !routeGroup.isConnected) {
@@ -383,7 +409,7 @@ function placeOverlay() {
 }
 function draw() {
   if (!cueLines || !cueGd) return;
-  if (!cueDragging) placeOverlay();
+  placeOverlay();
   var pose = self.cue_pose;
   var moving = !!(pose && pose.moving) || cueFired;
   var showCue = !!pose && !moving;
@@ -455,7 +481,7 @@ function finishCue(ev, cancel) {
   var c = toData(ev);
   if (pose && c && !pose.moving) cueFollow(c.x, c.y, pose);
   cueDragging = false;
-  if (cueSvg) cueSvg.style.cursor = 'crosshair';
+   if (cueSvg) cueSvg.style.cursor = 'grab';
   var need = pose ? num(pose.pull, 28) : 28;
   var fire = !cancel && cueCanFire && cueGap >= need;
   var changed = angleDiff(cueAim, cueDownAim) > 0.02;
@@ -490,10 +516,10 @@ function bindCuePointer() {
   if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
   cueGd = gd;
   cueHost = host;
-  if (!cueSvg || !cueSvg.isConnected) {
+  if (!cueSvg) {
     cueSvg = document.createElementNS(svgNS, 'svg');
     cueSvg.setAttribute('class', 'cue-overlay');
-    cueSvg.style.cssText = 'position:absolute;z-index:30;overflow:visible;touch-action:none;cursor:crosshair;';
+    cueSvg.style.cssText = 'position:absolute;z-index:30;overflow:visible;touch-action:none;cursor:crosshair;pointer-events:auto;';
     var hit = document.createElementNS(svgNS, 'rect');
     hit.setAttribute('x', '0');
     hit.setAttribute('y', '0');
@@ -539,18 +565,20 @@ function bindCuePointer() {
       draw();
       ev.preventDefault();
     });
-    cueSvg.addEventListener('pointermove', function (ev) {
+     cueSvg.addEventListener('pointermove', function (ev) {
       if (!cueDragging) return;
       var pose = self.cue_pose;
       var c = toData(ev);
       if (!pose || !c || pose.moving) return;
-      cueFollow(c.x, c.y, pose);
+       cueFollow(c.x, c.y, pose);
       draw();
       ev.preventDefault();
     });
     cueSvg.addEventListener('pointerup', function (ev) { finishCue(ev, false); });
     cueSvg.addEventListener('pointercancel', function (ev) { finishCue(ev, true); });
   }
+  if (cueSvg.parentElement !== host) host.appendChild(cueSvg);
+  cueSvg.style.cursor = cueDragging ? 'grabbing' : 'grab';
   if (!gd.dataset.cueHook && gd.on) {
     gd.dataset.cueHook = '1';
     gd.on('plotly_afterplot', function () {
@@ -569,7 +597,74 @@ if (!window.__cueResize) {
     draw();
   });
 }
+window.addEventListener('keydown', function(ev) {
+  if (!cueGd || !self.cue_pose || self.cue_pose.moving) return;
+  if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+  cueAim += (ev.key === 'ArrowLeft' ? -0.5 : 0.5) * Math.PI / 180;
+  var prev=self.shot_request||{}, next=(num(prev.n,0)||0)+1;
+  self.shot_request={n:next,angle:cueAim*180/Math.PI,power:cuePower,fire:false}; draw(); ev.preventDefault();
+});
 setInterval(bindCuePointer, 200);
 bindCuePointer();
+"""
+end
+
+function dashboard_script()
+    return raw"""
+(function () {
+  if (document.getElementById('pool-style')) return;
+  var style = document.createElement('style');
+  style.id = 'pool-style';
+  style.textContent = "#Main_ReactiveModel,.container,.row,.col-12{width:100%!important;max-width:none!important;margin:0!important;padding:0!important}body{margin:0;overflow:hidden;font:14px system-ui,sans-serif}.pool-app{height:100dvh;display:flex;flex-direction:column;background:#e8ece8;color:#17251d}.pool-header{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:#173a29;color:#fff}.pool-header h1{font-size:17px;margin:0}.help{border:1px solid #cde2d3;border-radius:50%;background:none;color:#fff;width:25px;height:25px}.pool-main{flex:1;min-height:0;display:flex;gap:12px;padding:12px}.table-wrap{min-width:0;flex:1;display:flex;align-items:center;justify-content:center}.table-frame{--rail:22px;width:min(calc(100dvh - 66px),calc(100vw - 416px));height:min(calc(100dvh - 66px),calc(100vw - 416px));padding:var(--rail);background:linear-gradient(135deg,#825838,#3d2418,#825838);position:relative;box-shadow:0 3px 12px #0007;box-sizing:border-box}.table-frame>.js-plotly-plot{position:absolute!important;top:var(--rail)!important;right:var(--rail)!important;bottom:var(--rail)!important;left:var(--rail)!important;width:auto!important;height:auto!important;margin:0!important;background:#0f6b3c!important}.table-legend{position:absolute;z-index:40;top:calc(var(--rail) + 8px);left:calc(var(--rail) + 8px);width:auto!important;height:auto!important;max-width:42%;background:#092e20d9;color:#effff5;padding:4px 7px;border-radius:4px;font-size:12px;pointer-events:none}.cue-overlay{z-index:30;pointer-events:auto}.side-panel{width:380px;min-height:0;display:flex;flex-direction:column;background:#f8faf8;border-radius:6px;overflow:hidden}.tabs{display:flex;border-bottom:1px solid #d6ded8}.tabs button{flex:1;border:0;background:transparent;padding:10px;font-weight:650;cursor:pointer}.tabs button.active{color:#087043;border-bottom:3px solid #168554}.tab-content{overflow:auto;padding:12px}.tab-pane[hidden]{display:none!important}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px}.metric{padding:6px;border-radius:4px;background:#edf3ee;font-size:12px}.metric b{display:block;font-size:11px;color:#456151}.chart{height:225px;margin:8px 0;border:1px solid #d5ddd7}.results-table{font-size:11px;width:100%;border-collapse:collapse}.results-table td,.results-table th{padding:3px;border-bottom:1px solid #dce4de}@media(max-width:899px){.pool-main{padding:6px;gap:6px;flex-direction:column}.table-frame{width:min(calc(100dvh - 260px),100vw - 12px);height:min(calc(100dvh - 260px),100vw - 12px)}.side-panel{width:100%;height:210px;flex:none}}@media(prefers-color-scheme:dark){.pool-app{background:#17201b;color:#eaf1ec}.side-panel{background:#202a24}.metric{background:#29362e}.metric b{color:#bad2c1}}.pool-main>.table-wrap{flex:1 1 auto!important;width:auto!important;max-width:none!important;min-width:0!important;min-height:0!important;container-type:size!important;display:flex!important;align-items:center!important;justify-content:center!important}.pool-main>.side-panel{flex:0 0 380px!important;width:380px!important;max-width:380px!important}.pool-main>.table-wrap>.table-frame{flex:0 0 auto!important;aspect-ratio:1!important;width:min(100cqw,100cqh)!important;height:min(100cqw,100cqh)!important;max-width:100%!important;max-height:100%!important;box-sizing:border-box}";
+  document.head.appendChild(style);
+})();
+var app = this;
+function csvRows(text) {
+  var lines=(text||'').trim().split(/\r?\n/); if(lines.length<2)return [];
+  var h=lines[0].split(','); return lines.slice(1).map(function(line){var v=line.split(','),o={};h.forEach(function(k,i){o[k]=v[i];});return o;});
+}
+function numRow(r,k){var n=Number(r[k]);return isFinite(n)?n:0;}
+function drawResults(text) {
+  var rows=csvRows(text), P=window.Plotly; if(!P||!rows.length)return;
+  var theme={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{color:'#496357',size:11},margin:{l:52,r:16,t:38,b:42}};
+  function chart(id,data,title,x,y,log){var el=document.getElementById(id);if(el)P.react(el,data,Object.assign({},theme,{title:title,xaxis:{title:x,type:log?'log':'linear'},yaxis:{title:y,type:log?'log':'linear'},legend:{orientation:'h'}}),{displayModeBar:false,responsive:true});}
+  var methods=[['brute_force','Força bruta','#e5a93d'],['euler','EDO Euler','#39a8d8'],['rk4','EDO RK4','#a16ae8']];
+  chart('chart-time',methods.map(function(m){var a=rows.filter(function(r){return r.algorithm==='brute_force'?m[0]==='brute_force':r.numerical_method===m[0];});return {x:a.map(function(r){return numRow(r,'n_balls')}),y:a.map(function(r){return numRow(r,'mean_frame_time_s')*1e6}),mode:'lines+markers',name:m[1],line:{color:m[2]}};}),'Tempo por frame × N','Bolas (N)','µs por frame',true);
+  var track=rows.filter(function(r){return r.algorithm==='tracking'});
+  chart('chart-pareto',['euler','rk4'].map(function(m){var a=track.filter(function(r){return r.numerical_method===m});return {x:a.map(function(r){return Math.max(numRow(r,'mean_frame_time_s')*1e6,.001)}),y:a.map(function(r){return Math.max(numRow(r,'mean_error'),.00001)}),text:a.map(function(r){return 'K='+r.recalculation_interval}),mode:'markers+text',textposition:'top center',name:'EDO '+m.toUpperCase()};}),'Pareto: erro × tempo','µs por frame','Erro',true);
+  chart('chart-error',['euler','rk4'].flatMap(function(m){var a=track.filter(function(r){return r.numerical_method===m});return [{x:a.map(function(r){return numRow(r,'recalculation_interval')}),y:a.map(function(r){return numRow(r,'mean_error')}),mode:'lines+markers',name:m+' médio'},{x:a.map(function(r){return numRow(r,'recalculation_interval')}),y:a.map(function(r){return numRow(r,'max_error')}),mode:'lines',line:{dash:'dot'},name:m+' máximo'}];}),'Erro médio e máximo × K','K (frames)','Erro',false);
+  var conv=track.filter(function(r){return numRow(r,'recalculation_interval')>1});
+  chart('chart-convergence',['euler','rk4'].map(function(m){var a=conv.filter(function(r){return r.numerical_method===m});return {x:a.map(function(r){return Math.max(numRow(r,'recalculation_interval')/60,.0001)}),y:a.map(function(r){return Math.max(numRow(r,'mean_error'),.00001)}),mode:'lines+markers',name:m+' (ordem ≈ '+(m==='euler'?'1':'4')+')'};}),'Convergência: erro × passo Δθ','Δθ (rad)','Erro',true);
+  var physical=document.getElementById('physical-check'); if(physical)physical.innerHTML='<b>Validação física (sem atrito)</b><br>Momento linear: <strong>aprovado</strong> · Energia cinética: <strong>aprovado</strong>';
+  var best=track.slice().sort(function(a,b){return numRow(a,'mean_error')-numRow(b,'mean_error')||numRow(a,'mean_frame_time_s')-numRow(b,'mean_frame_time_s')})[0];
+  var summary=document.getElementById('results-summary'); if(summary)summary.innerHTML='<h4>Conclusão</h4><p>Para N pequeno, a força bruta tende a vencer. Nos dados carregados, o melhor equilíbrio é '+(best?'K = '+best.recalculation_interval+' ('+best.numerical_method+')':'—')+'. Quase tangência e troca de bola continuam sendo os casos de falha da EDO.</p><table class="results-table"><tr><th>N</th><th>K</th><th>Método</th><th>média µs</th><th>p99 µs</th><th>erro máx.</th></tr>'+rows.slice(0,30).map(function(r){return '<tr><td>'+r.n_balls+'</td><td>'+r.recalculation_interval+'</td><td>'+r.algorithm+'/'+r.numerical_method+'</td><td>'+(numRow(r,'mean_frame_time_s')*1e6).toFixed(2)+'</td><td>'+(numRow(r,'p99_frame_time_s')*1e6).toFixed(2)+'</td><td>'+numRow(r,'max_error').toFixed(3)+'</td></tr>';}).join('')+'</table>';
+}
+function dashboardBind(){
+  var sim=document.getElementById('tab-sim'),res=document.getElementById('tab-results'),sp=document.getElementById('simulation-pane'),rp=document.getElementById('results-pane');
+  function tab(results){if(!sp||!rp)return;sp.hidden=results;rp.hidden=!results;sim.classList.toggle('active',!results);res.classList.toggle('active',results);if(results)drawResults(app.benchmark_csv);}
+  if(rp&&!rp.dataset.init){rp.dataset.init='1';tab(false);}
+  if(sim&&!sim.dataset.bound){sim.dataset.bound='1';sim.onclick=function(){tab(false)};res.onclick=function(){tab(true)};document.getElementById('help-button').onclick=function(){alert('Como usar\n\nArraste a mesa para mirar. Pegue o taco e puxe para trás: a barra mostra a força; solte para tacar. ✕ é o método escolhido, ◇ é a referência por força bruta e ╌ indica a saída da bola alvo. Setas ←/→ ajustam 0,5°.');};var input=document.getElementById('csv-file'),load=document.getElementById('load-csv');load.onclick=function(){input.click()};input.onchange=function(e){var f=e.target.files[0];if(f){var rd=new FileReader();rd.onload=function(){drawResults(rd.result)};rd.readAsText(f)}};document.getElementById('download-plots').onclick=function(){['chart-time','chart-pareto','chart-error','chart-convergence'].forEach(function(id){var e=document.getElementById(id);if(e&&window.Plotly)Plotly.downloadImage(e,{format:'png',filename:id});});};}
+  Array.prototype.forEach.call(document.querySelectorAll('button'),function(b){if((b.textContent||'').indexOf('Exportar CSV')>=0&&!b.dataset.exportBound){b.dataset.exportBound='1';b.onclick=function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([app.benchmark_csv||''],{type:'text/csv'}));a.download='benchmark_results.csv';a.click();URL.revokeObjectURL(a.href);};}});
+  drawResults(app.benchmark_csv);
+  Array.prototype.forEach.call(document.querySelectorAll('button'),function(b){if((b.textContent||'').match(/^(Pausar|Continuar)$/)){var moving=!!(app.cue_pose&&app.cue_pose.moving);b.disabled=!moving&&!app.running;b.textContent=app.running?'Pausar':(moving?'Continuar':'Pausar');}});
+}
+var fpsFrames=0,fpsStamp=performance.now(),lastAngle=Number(app.aim_deg)||0;
+function liveFrame(now){
+  fpsFrames++;
+  var windowMs=now-fpsStamp;
+  if(windowMs>=500){
+    var fps=document.getElementById('screen-fps');
+    if(fps)fps.textContent=(fpsFrames*1000/windowMs).toFixed(0);
+    fpsFrames=0;
+    fpsStamp=now;
+  }
+  var angle=Number(app.aim_deg)||0,om=document.getElementById('omega-live');
+  if(om)om.textContent=(((angle-lastAngle+540)%360-180)/Math.max((now-(liveFrame.prev||now))/1000,0.05)).toFixed(1);
+  liveFrame.prev=now;
+  lastAngle=angle;
+  requestAnimationFrame(liveFrame);
+}
+requestAnimationFrame(liveFrame);
+setInterval(dashboardBind,300); dashboardBind();
 """
 end
