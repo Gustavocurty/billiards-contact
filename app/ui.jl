@@ -97,121 +97,94 @@ function near_cue(state::SimulationState, x::Float64, y::Float64, power::Float64
     return segment_distance(x, y, ax, ay, bx, by) <= CUE_HIT
 end
 
+# Contornos em unidades da mesa: o tamanho visual acompanha o raio físico.
+function ball_trace(ball::Ball, color::String; border::String = "#1b1b1b", width::Int = 1)
+    angles = range(0, 2π; length = 65)
+    return PlotlyBase.scatter(
+        x = [ball.position[1] + ball.radius * cos(a) for a in angles],
+        y = [ball.position[2] + ball.radius * sin(a) for a in angles],
+        mode = "lines", fill = "toself", fillcolor = color,
+        line = PlotlyBase.attr(color = border, width = width),
+        hoverinfo = "skip", name = "Bola",
+    )
+end
+
 function table_traces(state::SimulationState)
     balls = state.balls
-    cue_i = state.cue_index
-    target_i = state.contact === nothing ? 0 : state.contact.ball_index
-    exact_i = state.reference_contact === nothing ? 0 : state.reference_contact.ball_index
-    others_x = Float64[]
-    others_y = Float64[]
-    others_color = String[]
-    for i in eachindex(balls)
-        (i == cue_i || i == target_i || i == exact_i) && continue
-        push!(others_x, balls[i].position[1])
-        push!(others_y, balls[i].position[2])
-        push!(others_color, BALL_COLORS[mod1(i, length(BALL_COLORS))])
-    end
-
-    cue = balls[cue_i]
-    x1 = cue.position[1]
-    y1 = cue.position[2]
+    cue = balls[state.cue_index]
+    contact = state.contact
+    exact = state.reference_contact
+    target_i = contact === nothing ? 0 : contact.ball_index
+    exact_i = exact === nothing ? 0 : exact.ball_index
     direction = route_vector(state)
-    contact_point = state.contact === nothing ? nothing : state.contact.point
-    if contact_point === nothing
-        x2 = x1 + direction[1] * 460.0
-        y2 = y1 + direction[2] * 460.0
-    else
-        ahead = (contact_point[1] - x1) * direction[1] + (contact_point[2] - y1) * direction[2]
-        if ahead > cue.radius
-            x2 = contact_point[1]
-            y2 = contact_point[2]
-        else
-            x2 = x1 + direction[1] * 460.0
-            y2 = y1 + direction[2] * 460.0
-        end
-    end
-
-    # O taco é desenhado no navegador, por cima da mesa, para o arrasto não
-    # esperar o redesenho do Plotly. A rota continua aqui, até o contato.
+    endpoint = contact === nothing ? cue.position + 460.0 * direction : contact.point
     traces = PlotlyBase.GenericTrace[]
     push!(traces, PlotlyBase.scatter(
-        x = [x1, x2], y = [y1, y2], mode = "lines", name = "Rota",
+        x = [cue.position[1], endpoint[1]], y = [cue.position[2], endpoint[2]],
+        mode = "lines", name = "Rota",
         line = PlotlyBase.attr(color = "#f4f7f5", width = 2, dash = "dash"),
     ))
-    push!(traces, PlotlyBase.scatter(
-        x = others_x, y = others_y, mode = "markers", name = "Bolas",
-        marker = PlotlyBase.attr(size = 18, color = others_color, line = PlotlyBase.attr(color = "#1b1b1b", width = 1)),
-    ))
-    move_x = Float64[]
-    move_y = Float64[]
     for i in eachindex(balls)
-        i == cue_i && continue
-        b = balls[i]
-        speed = hypot(b.velocity[1], b.velocity[2])
-        speed > 8.0 || continue
-        scale = clamp(speed, 40.0, 360.0) * 0.45
-        push!(move_x, b.position[1], b.position[1] + b.velocity[1] / speed * scale, NaN)
-        push!(move_y, b.position[2], b.position[2] + b.velocity[2] / speed * scale, NaN)
-    end
-    if !isempty(move_x)
-        push!(traces, PlotlyBase.scatter(
-            x = move_x, y = move_y, mode = "lines", name = "Para onde vão",
-            line = PlotlyBase.attr(color = "#ffcc80", width = 2, dash = "dot"),
-        ))
-    end
-    if target_i != 0 && contact_point !== nothing
-        target = balls[target_i]
-        tx = target.position[1]
-        ty = target.position[2]
-        nx = tx - contact_point[1]
-        ny = ty - contact_point[2]
-        nlen = hypot(nx, ny)
-        target_speed = hypot(target.velocity[1], target.velocity[2])
-        if nlen > 1e-6 && target_speed <= 8.0
+        ball = balls[i]
+        color = i == state.cue_index ? "#f7f7f2" : BALL_COLORS[mod1(i, length(BALL_COLORS))]
+        border = i == target_i ? "#ffe66d" : i == exact_i ? "#4dd0e1" : "#1b1b1b"
+        push!(traces, ball_trace(ball, color; border = border, width = i == target_i || i == exact_i ? 2 : 1))
+        i == state.cue_index && continue
+        speed = hypot(ball.velocity[1], ball.velocity[2])
+        if speed > MOVE_EPS
+            tip = ball.position + ball.velocity / speed * clamp(speed, 40.0, 360.0) * 0.45
             push!(traces, PlotlyBase.scatter(
-                x = [tx, tx + 160.0 * nx / nlen], y = [ty, ty + 160.0 * ny / nlen],
+                x = [ball.position[1], tip[1]], y = [ball.position[2], tip[2]],
+                mode = "lines", name = "Para onde vão",
+                line = PlotlyBase.attr(color = "#ffcc80", width = 2, dash = "dot"),
+            ))
+        end
+    end
+    if contact !== nothing
+        target = balls[target_i]
+        point = surface_contact(contact, target)
+        normal = target.position - contact.point
+        len = hypot(normal[1], normal[2])
+        if len > 1e-6 && hypot(target.velocity[1], target.velocity[2]) <= MOVE_EPS
+            tip = target.position + 160.0 * normal / len
+            push!(traces, PlotlyBase.scatter(
+                x = [target.position[1], tip[1]], y = [target.position[2], tip[2]],
                 mode = "lines", name = "Após o contato",
                 line = PlotlyBase.attr(color = "#ffcc80", width = 2, dash = "dot"),
             ))
         end
         push!(traces, PlotlyBase.scatter(
-            x = [tx], y = [ty], mode = "markers", name = "Alvo",
-            marker = PlotlyBase.attr(size = 21, color = "#ff5a5f", line = PlotlyBase.attr(color = exact_i != 0 && exact_i != target_i ? "#fff3e0" : "#1b1b1b", width = exact_i != 0 && exact_i != target_i ? 3 : 1)),
-        ))
-        radius_sum = cue.radius + target.radius
-        ring = range(0, 2π; length = 49)
-        push!(traces, PlotlyBase.scatter(
-            x = [tx + radius_sum * cos(a) for a in ring],
-            y = [ty + radius_sum * sin(a) for a in ring],
-            mode = "lines", name = "Círculo 2R",
-            line = PlotlyBase.attr(color = "#80deea", width = 1, dash = "dot"),
-        ))
-        push!(traces, PlotlyBase.scatter(
-            x = [contact_point[1]], y = [contact_point[2]], mode = "markers", name = "Contato",
-            marker = PlotlyBase.attr(symbol = "x", size = 14, color = "#ffe66d", line = PlotlyBase.attr(color = "#1b1b1b", width = 2)),
+            x = [point[1]], y = [point[2]], mode = "markers", name = "Contato na superfície",
+            marker = PlotlyBase.attr(symbol = "x", size = 9, color = "#ffe66d"),
         ))
     end
-    exact = state.reference_contact
     if exact !== nothing
+        point = surface_contact(exact, balls[exact_i])
         push!(traces, PlotlyBase.scatter(
-            x = [exact.point[1]], y = [exact.point[2]], mode = "markers", name = "Contato exato",
-            marker = PlotlyBase.attr(symbol = "diamond-open", size = 17, color = "#4dd0e1", line = PlotlyBase.attr(color = "#e0f7fa", width = 2)),
+            x = [point[1]], y = [point[2]], mode = "markers", name = "Contato exato na superfície",
+            marker = PlotlyBase.attr(symbol = "diamond-open", size = 12, color = "#4dd0e1"),
         ))
-        if exact_i != 0 && exact_i != target_i
-            b = balls[exact_i]
-            push!(traces, PlotlyBase.scatter(x = [b.position[1]], y = [b.position[2]], mode = "markers", name = "Alvo exato",
-                marker = PlotlyBase.attr(size = 21, color = "#26c6da", line = PlotlyBase.attr(color = "#fff3e0", width = 3))))
-            push!(traces, PlotlyBase.scatter(x = [b.position[1]], y = [b.position[2] + 34], mode = "text", text = ["bola errada"], name = "Aviso", textfont = PlotlyBase.attr(color = "#ffebee", size = 12)))
+        if exact_i != target_i && target_i != 0
+            target = balls[exact_i]
+            push!(traces, PlotlyBase.scatter(
+                x = [target.position[1]], y = [target.position[2] + target.radius + 20],
+                mode = "text", text = ["bola errada"], name = "Aviso",
+                textfont = PlotlyBase.attr(color = "#ffebee", size = 12),
+            ))
         end
-        if contact_point !== nothing && distance(contact_point, exact.point) > 0.5
-            δ = distance(contact_point, exact.point)
-            push!(traces, PlotlyBase.scatter(x = [contact_point[1], exact.point[1]], y = [contact_point[2], exact.point[2]], mode = "lines+text", text = ["", "Δ = $(round(δ; digits = 2))"], textposition = "top right", name = "Diferença", line = PlotlyBase.attr(color = "#ef5350", width = 2), textfont = PlotlyBase.attr(color = "#ffebee", size = 12)))
+        if contact !== nothing && distance(contact.point, exact.point) > 0.5
+            predicted = surface_contact(contact, balls[target_i])
+            # O erro numérico continua medido no centro fantasma, como no benchmark.
+            δ = distance(contact.point, exact.point)
+            push!(traces, PlotlyBase.scatter(
+                x = [predicted[1], point[1]], y = [predicted[2], point[2]],
+                mode = "lines+text", text = ["", "Δ = $(round(δ; digits = 2))"],
+                textposition = "top right", name = "Diferença dos métodos",
+                line = PlotlyBase.attr(color = "#ef5350", width = 2),
+                textfont = PlotlyBase.attr(color = "#ffebee", size = 12),
+            ))
         end
     end
-    push!(traces, PlotlyBase.scatter(
-        x = [x1], y = [y1], mode = "markers", name = "Branca",
-        marker = PlotlyBase.attr(size = 20, color = "#f7f7f2", line = PlotlyBase.attr(color = "#1b1b1b", width = 1)),
-    ))
     return traces
 end
 
@@ -221,18 +194,20 @@ end
 
 function ui()
     cell(class = "pool-app", pieces(
-            Genie.Renderer.Html.ParsedHTMLString("<header class='pool-header'><h1>Mesa de sinuca · Contato da bola fantasma</h1><button id='help-button' class='help' aria-label='Como usar'>?</button></header>"),
+            Genie.Renderer.Html.ParsedHTMLString("<header class='pool-header'><h1>Mesa de sinuca</h1><button id='help-button' class='help' aria-label='Como usar'>?</button></header>"),
             cell(class = "pool-main", pieces(
                 cell(class = "table-wrap", pieces(cell(class = "table-frame", pieces(
                     plot(:traces, layout = :layout, config = :chart_config),
-                    "<div class='table-legend'>— rota · ✕ contato · ◇ exato · ╌ saída<br><span id='cue-power'>Força: 0%</span></div>",
+                    "<div class='table-legend'>— rota · ✕ contato na bola · ◇ exato · ╌ saída<br><span id='cue-power'>Força: 0%</span></div>",
                 )))),
                 cell(class = "side-panel", pieces(
                     "<div class='tabs'><button id='tab-sim' class='active'>Simulação</button><button id='tab-results'>Resultados</button></div>",
                     cell(class = "tab-content", pieces(
                         cell(id = "simulation-pane", class = "tab-pane", pieces(
-                            select(:algorithm, options = [ALG_BRUTE, ALG_TRACK], label = "Algoritmo da rota", hint = "Método usado para o contato."),
-                            select(:method, options = [METHOD_EULER, METHOD_RK4], label = "Integração", hint = "Método numérico da EDO."),
+                            cell(class = "simulation-selects", pieces(
+                                select(:algorithm, options = [ALG_BRUTE, ALG_TRACK], label = "Algoritmo da rota", hint = "Método usado para o contato.", dense = true),
+                                select(:method, options = [METHOD_EULER, METHOD_RK4], label = "Integração", hint = "Método numérico da EDO.", dense = true),
+                            )),
                             p("Bolas: {{n_balls}}"), slider(2:1:16, :n_balls, lazy = true),
                             p("Intervalo K: {{recalc_interval}} frames (K = 1 é força bruta)"), slider(1:1:120, :recalc_interval),
                             row(pieces(btn("Tacada", @click(:shot_click), color = "primary"), btn("Pausar", @click(:pause_toggle_click)), btn("Resetar", @click(:reset_click)), btn("Sortear posições", @click(:random_click)))),
@@ -245,7 +220,7 @@ function ui()
                             p("Varreduras reproduzíveis com semente fixa."),
                             row(pieces(btn("Rodar experimentos", @click(:bench_click), color = "primary"), btn("Exportar CSV", @click(:export_click)), "<button id='load-csv'>Carregar CSV</button><input id='csv-file' type='file' accept='.csv' hidden>")),
                             p("{{benchmark_status}}"),
-                            "<progress id='bench-progress' value='{{benchmark_progress}}' max='100'></progress><div id='chart-time' class='chart'></div><div id='chart-pareto' class='chart'></div><div id='chart-error' class='chart'></div><div id='chart-convergence' class='chart'></div><div id='physical-check' class='metric'></div><button id='download-plots'>Baixar gráficos (PNG)</button><div id='results-summary'></div>",
+                            "<progress id='bench-progress' value='{{benchmark_progress}}' max='100'></progress><label class='result-selector'>Visualização <select id='result-view'><option value='chart-time'>Tempo por frame</option><option value='chart-pareto'>Pareto</option><option value='chart-error'>Erro</option><option value='chart-convergence'>Convergência</option><option value='result-details'>Resumo e tabela</option></select></label><div id='chart-time' class='chart'></div><div id='chart-pareto' class='chart'></div><div id='chart-error' class='chart'></div><div id='chart-convergence' class='chart'></div><div id='result-details' hidden><div id='physical-check' class='metric'></div><div id='results-summary'></div><div class='result-pagination'><button id='results-prev'>Anterior</button><span id='results-page'></span><button id='results-next'>Próxima</button></div></div><button id='download-plots'>Baixar gráficos (PNG)</button>",
                         )),
                     )),
                 )),
@@ -615,7 +590,32 @@ function dashboard_script()
   if (document.getElementById('pool-style')) return;
   var style = document.createElement('style');
   style.id = 'pool-style';
-  style.textContent = "#Main_ReactiveModel,.container,.row,.col-12{width:100%!important;max-width:none!important;margin:0!important;padding:0!important}body{margin:0;overflow:hidden;font:14px system-ui,sans-serif}.pool-app{height:100dvh;display:flex;flex-direction:column;background:#e8ece8;color:#17251d}.pool-header{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:#173a29;color:#fff}.pool-header h1{font-size:17px;margin:0}.help{border:1px solid #cde2d3;border-radius:50%;background:none;color:#fff;width:25px;height:25px}.pool-main{flex:1;min-height:0;display:flex;gap:12px;padding:12px}.table-wrap{min-width:0;flex:1;display:flex;align-items:center;justify-content:center}.table-frame{--rail:22px;width:min(calc(100dvh - 66px),calc(100vw - 416px));height:min(calc(100dvh - 66px),calc(100vw - 416px));padding:var(--rail);background:linear-gradient(135deg,#825838,#3d2418,#825838);position:relative;box-shadow:0 3px 12px #0007;box-sizing:border-box}.table-frame>.js-plotly-plot{position:absolute!important;top:var(--rail)!important;right:var(--rail)!important;bottom:var(--rail)!important;left:var(--rail)!important;width:auto!important;height:auto!important;margin:0!important;background:#0f6b3c!important}.table-legend{position:absolute;z-index:40;top:calc(var(--rail) + 8px);left:calc(var(--rail) + 8px);width:auto!important;height:auto!important;max-width:42%;background:#092e20d9;color:#effff5;padding:4px 7px;border-radius:4px;font-size:12px;pointer-events:none}.cue-overlay{z-index:30;pointer-events:auto}.side-panel{width:380px;min-height:0;display:flex;flex-direction:column;background:#f8faf8;border-radius:6px;overflow:hidden}.tabs{display:flex;border-bottom:1px solid #d6ded8}.tabs button{flex:1;border:0;background:transparent;padding:10px;font-weight:650;cursor:pointer}.tabs button.active{color:#087043;border-bottom:3px solid #168554}.tab-content{overflow:auto;padding:12px}.tab-pane[hidden]{display:none!important}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px}.metric{padding:6px;border-radius:4px;background:#edf3ee;font-size:12px}.metric b{display:block;font-size:11px;color:#456151}.chart{height:225px;margin:8px 0;border:1px solid #d5ddd7}.results-table{font-size:11px;width:100%;border-collapse:collapse}.results-table td,.results-table th{padding:3px;border-bottom:1px solid #dce4de}@media(max-width:899px){.pool-main{padding:6px;gap:6px;flex-direction:column}.table-frame{width:min(calc(100dvh - 260px),100vw - 12px);height:min(calc(100dvh - 260px),100vw - 12px)}.side-panel{width:100%;height:210px;flex:none}}@media(prefers-color-scheme:dark){.pool-app{background:#17201b;color:#eaf1ec}.side-panel{background:#202a24}.metric{background:#29362e}.metric b{color:#bad2c1}}.pool-main>.table-wrap{flex:1 1 auto!important;width:auto!important;max-width:none!important;min-width:0!important;min-height:0!important;container-type:size!important;display:flex!important;align-items:center!important;justify-content:center!important}.pool-main>.side-panel{flex:0 0 380px!important;width:380px!important;max-width:380px!important}.pool-main>.table-wrap>.table-frame{flex:0 0 auto!important;aspect-ratio:1!important;width:min(100cqw,100cqh)!important;height:min(100cqw,100cqh)!important;max-width:100%!important;max-height:100%!important;box-sizing:border-box}";
+  style.textContent = `
+#Main_ReactiveModel,.container{width:100%!important;max-width:none!important;margin:0!important;padding:0!important}
+*{box-sizing:border-box}body{margin:0;overflow:hidden;font:14px system-ui,sans-serif}
+.pool-app{height:100dvh;display:flex;flex-direction:column;background:#e8ece8;color:#17251d;overflow:hidden}
+.pool-header{height:42px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:#173a29;color:#fff}
+.pool-header h1{font-size:17px;margin:0;color:#fff!important}.help{border:1px solid #cde2d3;border-radius:50%;background:none;color:#fff;width:25px;height:25px}
+.pool-main{flex:1;min-height:0;display:flex;align-items:stretch;gap:50px;padding:12px 50px;overflow:hidden}
+.pool-main>.table-wrap{flex:1 1 0!important;width:auto!important;max-width:none!important;min-width:0!important;min-height:0;container-type:size;display:flex;align-items:center;justify-content:flex-end}
+.pool-main>.table-wrap>.table-frame{--rail:22px;flex:none;width:min(100cqw,100cqh)!important;height:min(100cqw,100cqh)!important;padding:var(--rail);background:linear-gradient(135deg,#825838,#3d2418,#825838);position:relative;box-shadow:0 3px 12px #0007}
+.table-frame>.js-plotly-plot{position:absolute!important;inset:var(--rail)!important;width:auto!important;height:auto!important;margin:0!important;background:#0f6b3c!important}
+.table-legend{position:absolute;z-index:40;top:calc(var(--rail) + 8px);left:calc(var(--rail) + 8px);width:auto!important;max-width:65%;background:#092e20d9;color:#effff5;padding:4px 7px;border-radius:4px;font-size:11px;pointer-events:none}
+.cue-overlay{z-index:30;pointer-events:auto}
+.pool-main>.side-panel{flex:0 0 440px!important;width:440px!important;max-width:440px!important;min-height:0;display:flex;flex-direction:column;background:#f8faf8;border-radius:6px;overflow:hidden}
+.tabs{display:flex;flex-shrink:0;border-bottom:1px solid #d6ded8}.tabs button{flex:1;border:0;background:transparent;padding:8px;font-weight:650;cursor:pointer}.tabs button.active{color:#087043;border-bottom:3px solid #168554}
+.tab-content{flex:1;min-height:0;padding:10px 14px;overflow:hidden}.tab-pane[hidden],[hidden]{display:none!important}
+.simulation-selects{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}.simulation-selects .q-field__label,.simulation-selects .q-field__native,.simulation-selects .q-field__input{color:#fff!important}
+.side-panel .q-field{width:100%;min-width:0;margin-bottom:8px}.side-panel .q-field__bottom{position:static;min-height:18px;padding:4px 0 0}.side-panel .q-field__messages{line-height:1.3;font-size:11px}.side-panel .q-field__native{min-width:0}
+.tab-pane>p{margin:6px 0;font-size:12px}.tab-pane h6{margin:10px 0 6px;font-size:14px;line-height:1.3}
+.tab-pane>.row{gap:6px;margin:0!important}.tab-pane .q-btn{min-height:28px;padding:3px 8px;font-size:11px}.tab-pane .q-slider{margin:0;min-height:28px}
+.metrics{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px}.metric{min-width:0;overflow-wrap:anywhere;padding:5px;border-radius:4px;background:#edf3ee;font-size:11px}.metric b{display:block;font-size:10px;color:#456151}
+#results-pane{height:100%;display:flex;flex-direction:column;gap:6px}#results-pane>p{margin:0}.result-selector{display:flex;align-items:center;gap:8px;font-size:12px}.result-selector select{min-width:0;flex:1;padding:5px}
+.chart{flex:1;min-height:0;width:100%;border:1px solid #d5ddd7}.results-table{font-size:10px;width:100%;border-collapse:collapse}.results-table td,.results-table th{padding:3px;border-bottom:1px solid #dce4de}.result-pagination{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px}#results-summary h4{font-size:13px;margin:8px 0 4px}#results-summary p{font-size:11px;margin:4px 0 8px}
+@media(max-height:740px){.tab-pane>p{margin:3px 0}.side-panel .q-field{margin-bottom:4px}.tab-pane h6{margin:6px 0 4px}.metric{padding:3px}.tab-content{padding:8px 12px}.tabs button{padding:6px}}
+@media(max-width:1099px){.pool-main{gap:20px;padding:10px 20px}.pool-main>.side-panel{flex-basis:400px!important;width:400px!important;max-width:400px!important}.pool-header h1{font-size:14px}}
+@media(prefers-color-scheme:dark){.pool-app{background:#17201b;color:#eaf1ec}.pool-main>.side-panel{background:#202a24}.metric{background:#29362e}.metric b{color:#bad2c1}}
+`;
   document.head.appendChild(style);
 })();
 var app = this;
@@ -624,8 +624,29 @@ function csvRows(text) {
   var h=lines[0].split(','); return lines.slice(1).map(function(line){var v=line.split(','),o={};h.forEach(function(k,i){o[k]=v[i];});return o;});
 }
 function numRow(r,k){var n=Number(r[k]);return isFinite(n)?n:0;}
+var resultPage = 0, resultCsv = null, resultRows = [];
+function resultPageSize(){return window.innerHeight < 740 ? 6 : 10;}
+function renderResultPage(){
+  var rows=resultRows, size=resultPageSize(), pages=Math.max(1,Math.ceil(rows.length/size));
+  resultPage=Math.max(0,Math.min(resultPage,pages-1));
+  var body=document.getElementById('results-rows');
+  if(body)body.innerHTML=rows.slice(resultPage*size,(resultPage+1)*size).map(function(r){return '<tr><td>'+r.n_balls+'</td><td>'+r.recalculation_interval+'</td><td>'+r.algorithm+'/'+r.numerical_method+'</td><td>'+(numRow(r,'mean_frame_time_s')*1e6).toFixed(2)+'</td><td>'+(numRow(r,'p99_frame_time_s')*1e6).toFixed(2)+'</td><td>'+numRow(r,'max_error').toFixed(3)+'</td></tr>';}).join('');
+  var label=document.getElementById('results-page');if(label)label.textContent=(resultPage+1)+' / '+pages;
+  var prev=document.getElementById('results-prev'),next=document.getElementById('results-next');
+  if(prev)prev.disabled=resultPage===0;if(next)next.disabled=resultPage===pages-1;
+}
+function showResultView(){
+  var select=document.getElementById('result-view');if(!select)return;
+  ['chart-time','chart-pareto','chart-error','chart-convergence','result-details'].forEach(function(id){
+    var el=document.getElementById(id);if(!el)return;el.hidden=id!==select.value;
+    if(!el.hidden&&el.classList.contains('chart')&&el.data&&window.Plotly)requestAnimationFrame(function(){window.Plotly.Plots.resize(el)});
+  });
+  renderResultPage();
+}
 function drawResults(text) {
+  if(text===resultCsv)return;
   var rows=csvRows(text), P=window.Plotly; if(!P||!rows.length)return;
+  resultCsv=text;resultRows=rows;resultPage=0;
   var theme={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{color:'#496357',size:11},margin:{l:52,r:16,t:38,b:42}};
   function chart(id,data,title,x,y,log){var el=document.getElementById(id);if(el)P.react(el,data,Object.assign({},theme,{title:title,xaxis:{title:x,type:log?'log':'linear'},yaxis:{title:y,type:log?'log':'linear'},legend:{orientation:'h'}}),{displayModeBar:false,responsive:true});}
   var methods=[['brute_force','Força bruta','#e5a93d'],['euler','EDO Euler','#39a8d8'],['rk4','EDO RK4','#a16ae8']];
@@ -637,15 +658,21 @@ function drawResults(text) {
   chart('chart-convergence',['euler','rk4'].map(function(m){var a=conv.filter(function(r){return r.numerical_method===m});return {x:a.map(function(r){return Math.max(numRow(r,'recalculation_interval')/60,.0001)}),y:a.map(function(r){return Math.max(numRow(r,'mean_error'),.00001)}),mode:'lines+markers',name:m+' (ordem ≈ '+(m==='euler'?'1':'4')+')'};}),'Convergência: erro × passo Δθ','Δθ (rad)','Erro',true);
   var physical=document.getElementById('physical-check'); if(physical)physical.innerHTML='<b>Validação física (sem atrito)</b><br>Momento linear: <strong>aprovado</strong> · Energia cinética: <strong>aprovado</strong>';
   var best=track.slice().sort(function(a,b){return numRow(a,'mean_error')-numRow(b,'mean_error')||numRow(a,'mean_frame_time_s')-numRow(b,'mean_frame_time_s')})[0];
-  var summary=document.getElementById('results-summary'); if(summary)summary.innerHTML='<h4>Conclusão</h4><p>Para N pequeno, a força bruta tende a vencer. Nos dados carregados, o melhor equilíbrio é '+(best?'K = '+best.recalculation_interval+' ('+best.numerical_method+')':'—')+'. Quase tangência e troca de bola continuam sendo os casos de falha da EDO.</p><table class="results-table"><tr><th>N</th><th>K</th><th>Método</th><th>média µs</th><th>p99 µs</th><th>erro máx.</th></tr>'+rows.slice(0,30).map(function(r){return '<tr><td>'+r.n_balls+'</td><td>'+r.recalculation_interval+'</td><td>'+r.algorithm+'/'+r.numerical_method+'</td><td>'+(numRow(r,'mean_frame_time_s')*1e6).toFixed(2)+'</td><td>'+(numRow(r,'p99_frame_time_s')*1e6).toFixed(2)+'</td><td>'+numRow(r,'max_error').toFixed(3)+'</td></tr>';}).join('')+'</table>';
+  var summary=document.getElementById('results-summary'); if(summary)summary.innerHTML='<h4>Conclusão</h4><p>Para N pequeno, a força bruta tende a vencer. Nos dados carregados, o melhor equilíbrio é '+(best?'K = '+best.recalculation_interval+' ('+best.numerical_method+')':'—')+'. Quase tangência e troca de bola continuam sendo os casos de falha da EDO.</p><table class="results-table"><tr><th>N</th><th>K</th><th>Método</th><th>média µs</th><th>p99 µs</th><th>erro máx.</th></tr>'+'<tbody id="results-rows"></tbody></table>';
+  showResultView();
 }
 function dashboardBind(){
+  var view=document.getElementById('result-view');
+  if(view&&!view.dataset.bound){view.dataset.bound='1';view.onchange=showResultView;
+    document.getElementById('results-prev').onclick=function(){resultPage--;renderResultPage()};
+    document.getElementById('results-next').onclick=function(){resultPage++;renderResultPage()};
+  }
   var sim=document.getElementById('tab-sim'),res=document.getElementById('tab-results'),sp=document.getElementById('simulation-pane'),rp=document.getElementById('results-pane');
-  function tab(results){if(!sp||!rp)return;sp.hidden=results;rp.hidden=!results;sim.classList.toggle('active',!results);res.classList.toggle('active',results);if(results)drawResults(app.benchmark_csv);}
+  function tab(results){if(!sp||!rp)return;sp.hidden=results;rp.hidden=!results;sim.classList.toggle('active',!results);res.classList.toggle('active',results);if(results){drawResults(app.benchmark_csv);showResultView();}}
   if(rp&&!rp.dataset.init){rp.dataset.init='1';tab(false);}
   if(sim&&!sim.dataset.bound){sim.dataset.bound='1';sim.onclick=function(){tab(false)};res.onclick=function(){tab(true)};document.getElementById('help-button').onclick=function(){alert('Como usar\n\nArraste a mesa para mirar. Pegue o taco e puxe para trás: a barra mostra a força; solte para tacar. ✕ é o método escolhido, ◇ é a referência por força bruta e ╌ indica a saída da bola alvo. Setas ←/→ ajustam 0,5°.');};var input=document.getElementById('csv-file'),load=document.getElementById('load-csv');load.onclick=function(){input.click()};input.onchange=function(e){var f=e.target.files[0];if(f){var rd=new FileReader();rd.onload=function(){drawResults(rd.result)};rd.readAsText(f)}};document.getElementById('download-plots').onclick=function(){['chart-time','chart-pareto','chart-error','chart-convergence'].forEach(function(id){var e=document.getElementById(id);if(e&&window.Plotly)Plotly.downloadImage(e,{format:'png',filename:id});});};}
   Array.prototype.forEach.call(document.querySelectorAll('button'),function(b){if((b.textContent||'').indexOf('Exportar CSV')>=0&&!b.dataset.exportBound){b.dataset.exportBound='1';b.onclick=function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([app.benchmark_csv||''],{type:'text/csv'}));a.download='benchmark_results.csv';a.click();URL.revokeObjectURL(a.href);};}});
-  drawResults(app.benchmark_csv);
+  if(rp&&!rp.hidden)drawResults(app.benchmark_csv);
   Array.prototype.forEach.call(document.querySelectorAll('button'),function(b){if((b.textContent||'').match(/^(Pausar|Continuar)$/)){var moving=!!(app.cue_pose&&app.cue_pose.moving);b.disabled=!moving&&!app.running;b.textContent=app.running?'Pausar':(moving?'Continuar':'Pausar');}});
 }
 var fpsFrames=0,fpsStamp=performance.now(),lastAngle=Number(app.aim_deg)||0;
@@ -664,6 +691,7 @@ function liveFrame(now){
   lastAngle=angle;
   requestAnimationFrame(liveFrame);
 }
+window.addEventListener('resize',showResultView);
 requestAnimationFrame(liveFrame);
 setInterval(dashboardBind,300); dashboardBind();
 """

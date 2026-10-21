@@ -90,3 +90,23 @@ end
     @test bounced[1].position ≈ Vec2(990.0, 10.0) atol = 1e-6
     @test bounced[1].velocity ≈ Vec2(-100.0, 100.0) atol = 1e-6
 end
+
+@testset "contato na superfície e instante da colisão" begin
+    for angle in (0.0, π / 6, π / 3), target_radius in (12.0, 18.0)
+        n = Vec2(cos(angle), sin(angle))
+        target = Ball(Vec2(500.0, 500.0), Vec2(0.0, 0.0), target_radius)
+        cue_radius = 18.0
+        ghost = target.position - (cue_radius + target_radius) * n
+        contact = Contact(ghost, 2, 100.0)
+        point = surface_contact(contact, target)
+        @test distance(point, target.position) ≈ target.radius
+        @test distance(point, ghost) ≈ cue_radius
+        @test point ≈ ghost + cue_radius * n
+        pair = [Ball(ghost - 10.0 * n, 100.0 * n, cue_radius), target]
+        advance_balls!(pair, 0.099, 1000.0, 1000.0; collide = true)
+        @test pair[2].velocity == Vec2(0.0, 0.0)
+        advance_balls!(pair, 0.001, 1000.0, 1000.0; collide = true)
+        @test distance(pair[1].position, pair[2].position) ≈ cue_radius + target_radius atol = 1e-7
+        @test pair[2].velocity ≈ 100.0 * n atol = 1e-7
+    end
+end

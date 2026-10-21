@@ -65,8 +65,9 @@ end
 function format_contact(state::SimulationState)::String
     contact = state.contact
     contact === nothing && return "sem contato"
-    x = round(contact.point[1]; digits = 1)
-    y = round(contact.point[2]; digits = 1)
+    point = surface_contact(contact, state.balls[contact.ball_index])
+    x = round(point[1]; digits = 1)
+    y = round(point[2]; digits = 1)
     return "($x, $y)"
 end
 

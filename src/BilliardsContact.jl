@@ -16,6 +16,7 @@ include("metrics.jl")
 
 export Vec2, Ball, Contact, SimulationState, SimulationConfig
 export cross2, distance, ray_circle_hit, direction_from, s_derivative, circle_residual
+export surface_contact
 export find_contact_bruteforce, find_shot_contact, locate_contact
 export euler_theta, rk4_theta, integrate_s
 export advance_balls!, advance_events!, initialize!, step!, aim_step!, strike!

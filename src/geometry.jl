@@ -67,3 +67,11 @@ function circle_residual(theta::Float64, s::Float64, origin::Vec2, center::Vec2,
     w = origin + s * d - center
     return abs(hypot(w[1], w[2]) - radius_sum)
 end
+
+"""Ponto na superfície do alvo voltado ao centro previsto da bola branca."""
+function surface_contact(contact::Contact, target::Ball)::Vec2
+    offset = contact.point - target.position
+    length = hypot(offset[1], offset[2])
+    length <= SPEED_EPS && return target.position
+    return target.position + (target.radius / length) * offset
+end
