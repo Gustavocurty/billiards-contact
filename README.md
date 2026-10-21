@@ -24,7 +24,7 @@ A EDO atua só na **mira**, com as bolas paradas. Na tacada, o movimento usa cá
 
 ## Como rodar
 
-Requisitos: Julia 1.13 (GenieFramework 3.1.0, PlotlyBase, StaticArrays). Testado no Windows.
+Requisitos: Julia 1.13 (GenieFramework 3.1.0, PlotlyBase, StaticArrays). Testado no Windows e no Linux com Julia 1.13.1.
 
 ```powershell
 julia --project=. -e "using Pkg; Pkg.instantiate()"
@@ -32,11 +32,21 @@ julia --project=. app\app.jl          # abre http://127.0.0.1:8000
 julia --project=. -e "using Pkg; Pkg.test()"   # 236 testes
 ```
 
+No Linux, use `julia --project=. app/app.jl` para iniciar a interface. Os comandos de instalação das dependências e testes são os mesmos.
+
 O benchmark em C++ (`cpp/billiards_bench.exe`) gera o `benchmark_results.csv`, que não vem no clone (está no `.gitignore`). Use o botão **Rodar experimentos** da aba Resultados ou:
 
 ```powershell
 .\cpp\billiards_bench.exe benchmark_results.csv tmp\bench.svg
 ```
+
+No Linux, compile o benchmark para gerar o executável nativo (requer `g++`):
+
+```bash
+g++ -O3 -std=c++17 cpp/benchmark.cpp -o cpp/billiards_bench
+```
+
+O botão **Rodar experimentos** prefere o executável nativo; se ele não estiver disponível, usa o benchmark em Julia, com uma varredura menor.
 
 ## Como usar
 
@@ -46,7 +56,13 @@ O benchmark em C++ (`cpp/billiards_bench.exe`) gera o `benchmark_results.csv`, q
 - Use os cenários prontos: *Aglomerado*, *Quase alinhadas* (a primeira bola atingida muda com um giro pequeno) e *Quase tangente* (pior caso da EDO).
 - Quando o método erra a bola, aparece "bola errada"; quando os contatos divergem mais de 0,5, aparece um segmento vermelho com o Δ.
 
+Em telas maiores, a área útil é dividida em **60% para a mesa à esquerda** e **40% para o painel à direita**, mantendo a mesa quadrada. No celular, o painel fica abaixo da mesa. A interface acompanha o tema claro/escuro do sistema, com contraste ajustado nos controles, títulos, eixos e legendas dos gráficos.
+
 ## Resultados
+
+A aba mostra apenas **experimentos automáticos**, independentes das tacadas e dos controles da simulação. Clique em **Rodar experimentos** para gerar os dados; se já existir `benchmark_results.csv`, ele é carregado ao iniciar a interface. Também é possível usar **Carregar CSV**.
+
+Em **Visualização**, escolha tempo por frame, Pareto, erro ou resumo e tabela paginada. **Exportar CSV** baixa os dados gerados pelo benchmark; **Baixar gráficos (PNG)** exporta os três gráficos. Não há cálculo nem histórico de resultados por tacada.
 
 O benchmark testou 90 configurações: N = 10, 100, 1.000, 10.000 e 100.000 bolas, K = 1, 5, 10, 30, 60 e 120, e os métodos força bruta, Euler e RK4. Giro de 0,01 rad por atualização, 40 atualizações × 5 repetições. O erro é a distância entre os centros previstos, em unidades da mesa (1000×1000). Tempos em µs, ganho = tempo da busca ÷ tempo do método.
 
