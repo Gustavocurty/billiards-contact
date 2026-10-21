@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="460" viewBox="0 0 760 460">
+<rect width="760" height="460" fill="#f7f4ee"/>
+<text x="380" y="28" text-anchor="middle" font-family="sans-serif" font-size="16">N = 10: erro médio e bola errada × K</text>
+<text x="70" y="52" font-family="sans-serif" font-size="13">Erro médio (unidade da mesa)</text>
+<line x1="70" y1="220" x2="720" y2="220" stroke="#333"/>
+<line x1="70" y1="70" x2="70" y2="220" stroke="#333"/>
+<circle cx="70.0" cy="220.0" r="3.5" fill="#e53935"/>
+<circle cx="288.5141404493053" cy="213.53839336616997" r="3.5" fill="#e53935"/>
+<circle cx="382.6230583483781" cy="210.13579325627353" r="3.5" fill="#e53935"/>
+<circle cx="531.7821642018544" cy="208.98876514039415" r="3.5" fill="#e53935"/>
+<circle cx="625.8910821009273" cy="70.0" r="3.5" fill="#e53935"/>
+<circle cx="720.0" cy="70.0" r="3.5" fill="#e53935"/>
+<polyline points="70.0,220.0 288.5141404493053,213.53839336616997 382.6230583483781,210.13579325627353 531.7821642018544,208.98876514039415 625.8910821009273,70.0 720.0,70.0" fill="none" stroke="#e53935" stroke-width="1.4"/>
+<circle cx="70.0" cy="220.0" r="3.5" fill="#1e88e5"/>
+<circle cx="288.5141404493053" cy="219.93862368063301" r="3.5" fill="#1e88e5"/>
+<circle cx="382.6230583483781" cy="219.88480557741258" r="3.5" fill="#1e88e5"/>
+<circle cx="531.7821642018544" cy="219.69681387747238" r="3.5" fill="#1e88e5"/>
+<circle cx="625.8910821009273" cy="78.01382235306733" r="3.5" fill="#1e88e5"/>
+<circle cx="720.0" cy="78.01382235306733" r="3.5" fill="#1e88e5"/>
+<polyline points="70.0,220.0 288.5141404493053,219.93862368063301 382.6230583483781,219.88480557741258 531.7821642018544,219.69681387747238 625.8910821009273,78.01382235306733 720.0,78.01382235306733" fill="none" stroke="#1e88e5" stroke-width="1.4"/>
+<text x="70" y="268" font-family="sans-serif" font-size="13">Bola errada (%)</text>
+<line x1="70" y1="400" x2="720" y2="400" stroke="#333"/>
+<line x1="70" y1="286" x2="70" y2="400" stroke="#333"/>
+<text x="390" y="450" text-anchor="middle" font-family="sans-serif" font-size="12">K em escala log10 (1, 5, 10, 30, 60, 120)</text>
+<text x="64" y="224" text-anchor="end" font-family="sans-serif" font-size="11">0.0</text>
+<text x="64" y="78" text-anchor="end" font-family="sans-serif" font-size="11">10.2</text>
+<text x="64" y="404" text-anchor="end" font-family="sans-serif" font-size="11">0.0</text>
+<text x="64" y="294" text-anchor="end" font-family="sans-serif" font-size="11">5.0</text>
+<circle cx="70.0" cy="400.0" r="3.5" fill="#e53935"/>
+<circle cx="288.5141404493053" cy="400.0" r="3.5" fill="#e53935"/>
+<circle cx="382.6230583483781" cy="400.0" r="3.5" fill="#e53935"/>
+<circle cx="531.7821642018544" cy="400.0" r="3.5" fill="#e53935"/>
+<circle cx="625.8910821009273" cy="286.0" r="3.5" fill="#e53935"/>
+<circle cx="720.0" cy="286.0" r="3.5" fill="#e53935"/>
+<polyline points="70.0,400.0 288.5141404493053,400.0 382.6230583483781,400.0 531.7821642018544,400.0 625.8910821009273,286.0 720.0,286.0" fill="none" stroke="#e53935" stroke-width="1.4"/>
+<circle cx="70.0" cy="400.0" r="3.5" fill="#1e88e5"/>
+<circle cx="288.5141404493053" cy="400.0" r="3.5" fill="#1e88e5"/>
+<circle cx="382.6230583483781" cy="400.0" r="3.5" fill="#1e88e5"/>
+<circle cx="531.7821642018544" cy="400.0" r="3.5" fill="#1e88e5"/>
+<circle cx="625.8910821009273" cy="286.0" r="3.5" fill="#1e88e5"/>
+<circle cx="720.0" cy="286.0" r="3.5" fill="#1e88e5"/>
+<polyline points="70.0,400.0 288.5141404493053,400.0 382.6230583483781,400.0 531.7821642018544,400.0 625.8910821009273,286.0 720.0,286.0" fill="none" stroke="#1e88e5" stroke-width="1.4"/>
+<circle cx="520" cy="40" r="4" fill="#e53935"/><text x="530" y="44" font-family="sans-serif" font-size="12">Euler</text>
+<circle cx="600" cy="40" r="4" fill="#1e88e5"/><text x="610" y="44" font-family="sans-serif" font-size="12">RK4</text>
+</svg>

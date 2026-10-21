@@ -1,0 +1,42 @@
+linhas 90
+frames 40 reps 5
+N=10 K=5 euler mean_us=0.077 median_us=0.09999999999999999 p99_us=0.19999999999999998 brute_us=0.1165 gain=1.512987012987013 brute_over_k_us=0.0233 err=0.440626498 max=2.06194463 wrong=0.0 recalcs=95 scheduled_frames=40
+N=10 K=5 rk4 mean_us=0.103 median_us=0.09999999999999999 p99_us=0.19999999999999998 brute_us=0.1165 gain=1.1310679611650487 brute_over_k_us=0.0233 err=0.00418534185 max=0.0520209481 wrong=0.0 recalcs=85 scheduled_frames=40
+N=100 K=30 euler mean_us=0.254 median_us=0.09999999999999999 p99_us=0.8999999999999999 brute_us=0.811 gain=3.1929133858267718 brute_over_k_us=0.027033333333333333 err=11.944477 max=61.554848 wrong=20.0 recalcs=50 scheduled_frames=5
+N=100 K=30 rk4 mean_us=0.20450000000000002 median_us=0.09999999999999999 p99_us=0.8999999999999999 brute_us=0.811 gain=3.965770171149144 brute_over_k_us=0.027033333333333333 err=25.1834047 max=193.928249 wrong=27.5 recalcs=30 scheduled_frames=5
+N=100000 K=30 euler mean_us=405.2235 median_us=713.4 p99_us=842.0 brute_us=780.0459999999999 gain=1.9249772039380737 brute_over_k_us=26.00153333333333 err=2.66147389 max=11.3112233 wrong=45.0 recalcs=115 scheduled_frames=5
+N=100000 K=30 rk4 mean_us=518.751 median_us=717.1999999999999 p99_us=966.7 brute_us=780.0459999999999 gain=1.5037002338308745 brute_over_k_us=26.00153333333333 err=1.86173226 max=10.7804619 wrong=30.0 recalcs=145 scheduled_frames=5
+--- criterio erro_medio<=2 e bola_errada<=5, menor tempo ---
+melhor N=10 K=5 euler mean_us=0.077 err=0.440626498 wrong=0.0
+elegiveis 46
+--- elegiveis com K>1 e N>=100 ---
+N=100 K=5 força bruta mean_us=0.8150000000000001 err=0.0 wrong=0.0
+N=100 K=10 força bruta mean_us=0.8185 err=0.0 wrong=0.0
+N=100 K=30 força bruta mean_us=0.811 err=0.0 wrong=0.0
+N=100 K=60 força bruta mean_us=0.8180000000000001 err=0.0 wrong=0.0
+N=100 K=120 força bruta mean_us=0.8035 err=0.0 wrong=0.0
+N=1000 K=5 força bruta mean_us=7.3385 err=0.0 wrong=0.0
+N=1000 K=10 força bruta mean_us=7.6295 err=0.0 wrong=0.0
+N=1000 K=30 força bruta mean_us=7.456 err=0.0 wrong=0.0
+N=1000 K=60 força bruta mean_us=11.137 err=0.0 wrong=0.0
+N=1000 K=120 força bruta mean_us=7.859000000000001 err=0.0 wrong=0.0
+N=10000 K=5 força bruta mean_us=80.0405 err=0.0 wrong=0.0
+N=10000 K=10 força bruta mean_us=78.7465 err=0.0 wrong=0.0
+N=10000 K=30 força bruta mean_us=75.00699999999999 err=0.0 wrong=0.0
+N=10000 K=60 força bruta mean_us=74.35449999999999 err=0.0 wrong=0.0
+N=10000 K=120 força bruta mean_us=78.46100000000001 err=0.0 wrong=0.0
+N=100000 K=5 força bruta mean_us=764.1325 err=0.0 wrong=0.0
+N=100000 K=10 força bruta mean_us=763.5794999999999 err=0.0 wrong=0.0
+N=100000 K=30 força bruta mean_us=780.0459999999999 err=0.0 wrong=0.0
+N=100000 K=60 força bruta mean_us=746.4665000000001 err=0.0 wrong=0.0
+N=100000 K=120 força bruta mean_us=829.0895 err=0.0 wrong=0.0
+--- N=10 todos os metodos, menor tempo ---
+força bruta mean_us=0.113 err=0.0 wrong=0.0
+euler mean_us=0.087 err=0.750872365 wrong=0.0
+rk4 mean_us=0.092 err=0.0206747094 wrong=0.0
+--- raio ---
+N=10 radius=18.0
+N=100 radius=5.69209979
+N=1000 radius=1.8
+N=10000 radius=0.569209979
+N=100000 radius=0.18
